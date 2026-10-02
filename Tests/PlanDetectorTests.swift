@@ -25,13 +25,16 @@ final class PlanDetectorTests: XCTestCase {
         XCTAssertEqual(plan.subscription?.monthlyUSD, 20)
     }
 
-    /// An account billed some other way has no monthly figure to compare
-    /// against, and inventing one would be worse than saying nothing.
-    func testAnAccountBilledAnotherWayIsNotAPlan() throws {
+    /// Enterprise and API-billed accounts are named but not given a list price.
+    func testAnAccountBilledAnotherWayIsNamedButUnpriced() throws {
         let path = try write("""
         {"oauthAccount": {"organizationType": "claude_pro", "billingType": "api_credit"}}
         """)
-        XCTAssertNil(PlanDetector.detectClaude(path: path))
+        let plan = try XCTUnwrap(PlanDetector.detectClaude(path: path))
+        XCTAssertEqual(plan.planID, "claude_pro")
+        XCTAssertNil(plan.monthlyUSD)
+        XCTAssertTrue(plan.needsManualMonthlyPrice)
+        XCTAssertNil(plan.subscription)
     }
 
     /// A plan id we have no price for still identifies itself; it just cannot
@@ -50,6 +53,15 @@ final class PlanDetectorTests: XCTestCase {
     func testAConfigWithNoAccountIsNotAPlan() throws {
         XCTAssertNil(PlanDetector.detectClaude(path: try write("{}")))
         XCTAssertNil(PlanDetector.detectClaude(path: "/nowhere/at/all.json"))
+    }
+
+    func testClaudeDesktopIsDetectedFromConfig() throws {
+        let path = NSTemporaryDirectory() + "claude-desktop-\(UUID().uuidString).json"
+        try "{}".write(toFile: path, atomically: true, encoding: .utf8)
+        let plan = try XCTUnwrap(PlanDetector.detectClaudeDesktop(configPath: path))
+        XCTAssertEqual(plan.planID, "claude_enterprise")
+        XCTAssertEqual(plan.source, "Claude.app")
+        XCTAssertTrue(plan.needsManualMonthlyPrice)
     }
 
     /// Every price in the catalogue has to be reachable by the id a vendor
@@ -190,9 +202,9 @@ final class AutoEnableTests: XCTestCase {
 
     func testAFoundPlanSwitchesItsRingOn() {
         let p = preferences()
-        XCTAssertTrue(p.enabledVendors.isEmpty)
-        p.autoEnableRings(for: [.anthropic, .openai])
-        XCTAssertEqual(p.enabledVendors, [.anthropic, .openai])
+        XCTAssertTrue(p.enabledApps.isEmpty)
+        p.autoEnableRings(for: [UsageApp(id: "claude"), UsageApp(id: "codex")])
+        XCTAssertEqual(p.enabledApps, ["claude", "codex"])
     }
 
     /// The one that matters: turning a ring off has to stay off. Without the
@@ -200,18 +212,18 @@ final class AutoEnableTests: XCTestCase {
     /// switch it back on and the setting would appear not to work at all.
     func testSwitchingOneOffKeepsItOff() {
         let p = preferences()
-        p.autoEnableRings(for: [.anthropic])
-        p.setRing(false, for: .anthropic)
-        p.autoEnableRings(for: [.anthropic])          // as a later launch would
-        XCTAssertFalse(p.showsRing(for: .anthropic))
+        p.autoEnableRings(for: [UsageApp(id: "claude")])
+        p.setRing(false, for: UsageApp(id: "claude"))
+        p.autoEnableRings(for: [UsageApp(id: "claude")])
+        XCTAssertFalse(p.showsRing(for: UsageApp(id: "claude")))
     }
 
     /// A plan found for the first time later on still gets its ring, even
     /// though others have already had theirs.
     func testANewlyFoundPlanIsStillWelcome() {
         let p = preferences()
-        p.autoEnableRings(for: [.anthropic])
-        p.autoEnableRings(for: [.anthropic, .openai])
-        XCTAssertEqual(p.enabledVendors, [.anthropic, .openai])
+        p.autoEnableRings(for: [UsageApp(id: "claude")])
+        p.autoEnableRings(for: [UsageApp(id: "claude"), UsageApp(id: "codex")])
+        XCTAssertEqual(p.enabledApps, ["claude", "codex"])
     }
 }

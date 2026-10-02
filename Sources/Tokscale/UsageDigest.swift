@@ -1,52 +1,39 @@
 import Foundation
 
 /// Everything the rings show, worked out once from the two reports.
-///
-/// Pure: given the same reports and the same `now`, it produces the same
-/// digest. All the arithmetic that used to be scattered through a provider per
-/// ring — milestones, shares, baselines, model tables — lives here, where it
-/// can be tested without a notch, a timer or a subprocess.
 struct UsageDigest: Equatable {
     let today: Period
     let month: Period
     let lifetime: Period
-    /// Vendors this machine has actually used, busiest first. The settings list
-    /// is built from this rather than from a hard-coded roster, so a ring is
-    /// only ever offered for a company whose models you have really run.
-    let vendors: [VendorUsage]
-    /// The per-day history, kept so that a stretch of any shape can be sliced
-    /// out of it later without another read. A billing period does not line up
-    /// with a calendar month — a plan billed on the 3rd has paid for the 3rd to
-    /// the 2nd — so `month` cannot answer for it.
+    /// Apps this machine has actually used, busiest first.
+    let apps: [AppUsage]
     let days: [DayUsage]
     let generatedAt: Date
 
     struct DayUsage: Equatable {
-        /// `yyyy-MM-dd`, tokscale's own key for which day a session fell on.
         let date: String
         let totals: Totals
         let models: [ModelUsage]
     }
 
-    /// One vendor's usage over an arbitrary stretch of days.
-    ///
-    /// Keys are compared as strings rather than parsed back into dates: they
-    /// are already the vendor's idea of which day a session belongs to, and
-    /// re-deriving that through `Date` only introduces a time zone to get wrong.
-    func totals(for vendor: Vendor, in period: BillingPeriod,
+    func totals(for app: UsageApp, in period: BillingPeriod,
                 calendar: Calendar = .current) -> Totals {
-        let key = DayKey(calendar: calendar)
-        let from = key.day(period.start)
-        // Exclusive: the renewal day belongs to the period it starts.
-        let until = key.day(period.end)
-        return days
-            .filter { $0.date >= from && $0.date < until }
-            .flatMap(\.models)
-            .filter { $0.vendor == vendor }
+        models(for: app, in: period, calendar: calendar)
             .reduce(Totals()) { $0 + $1.totals }
     }
 
-    // MARK: - Parts
+    /// Per-model usage for one app inside a billing window, busiest first.
+    func models(for app: UsageApp, in period: BillingPeriod,
+                calendar: Calendar = .current) -> [ModelUsage] {
+        let key = DayKey(calendar: calendar)
+        let from = key.day(period.start)
+        let until = key.day(period.end)
+        let slice = days
+            .filter { $0.date >= from && $0.date < until }
+            .flatMap(\.models)
+            .filter { $0.app == app }
+        return Self.merge(slice)
+    }
 
     struct Totals: Equatable {
         var counts = TokenCounts()
@@ -63,44 +50,27 @@ struct UsageDigest: Equatable {
 
     struct ModelUsage: Equatable, Identifiable {
         let model: String
-        let vendor: Vendor
+        let app: UsageApp
         let totals: Totals
-        var id: String { model }
+        var id: String { "\(app.id)|\(model)" }
     }
 
-    struct VendorUsage: Equatable, Identifiable {
-        let vendor: Vendor
+    struct AppUsage: Equatable, Identifiable {
+        let app: UsageApp
         let totals: Totals
-        /// This vendor's own models, busiest first.
         let models: [ModelUsage]
-        var id: String { vendor.rawValue }
+        var id: String { app.id }
     }
 
-    /// What a ring's arc is measured against.
-    ///
-    /// Always named, never implied. An arc at 70% means nothing until you can
-    /// say 70% *of what*, and each of the three rings answers that differently
-    /// — so the answer travels with the number instead of living in a comment.
     struct Baseline: Equatable {
         let value: Double
-        /// The key for the phrase naming what this is measured against.
-        ///
-        /// A key rather than a finished string: the digest is arithmetic and
-        /// has no business knowing which language anybody reads. Naming the
-        /// phrase and letting the builder look it up also makes the whole
-        /// structure `Equatable` without the closure comparison the old version
-        /// needed.
         let captionKey: String
     }
 
     struct Period: Equatable {
         let totals: Totals
         let models: [ModelUsage]
-        let vendors: [VendorUsage]
-        /// Nil when there is nothing honest to measure against — a first day
-        /// with no history behind it, or a first month with no month before it.
-        /// The ring then draws its track and no arc, rather than inventing a
-        /// denominator.
+        let apps: [AppUsage]
         let baseline: Baseline?
 
         var fraction: Double? {
@@ -109,23 +79,18 @@ struct UsageDigest: Equatable {
         }
     }
 
-    // MARK: - Building
-
     static func build(graph: GraphReport, lifetime report: UsageReport,
+                      desktop: ClaudeDesktopSupplement? = nil,
                       now: Date = Date(), calendar: Calendar = .current) -> UsageDigest {
+        let graph = mergedGraph(graph, desktop: desktop)
+        let report = mergedLifetime(report, desktop: desktop)
         let days = graph.contributions
         let key = DayKey(calendar: calendar)
 
-        // --- Today -----------------------------------------------------------
         let todayKey = key.day(now)
         let todayDays = days.filter { $0.date == todayKey }
         let todayTotals = totals(ofDays: todayDays)
 
-        // Measured against the busiest day of the last thirty, today excluded:
-        // the ring closes when you match your own best recent day, which is a
-        // fact about you rather than a number picked out of the air. The
-        // *busiest* rather than the median on purpose — this is a ring you are
-        // trying to fill, so it should be hard to fill.
         let windowStart = key.day(calendar.date(byAdding: .day, value: -30, to: now) ?? now)
         let recentPeak = days
             .filter { $0.date >= windowStart && $0.date < todayKey }
@@ -135,14 +100,10 @@ struct UsageDigest: Equatable {
             ? Baseline(value: Double(recentPeak), captionKey: "baseline.recentPeak")
             : nil
 
-        // --- This month ------------------------------------------------------
         let monthPrefix = key.month(now)
         let monthDays = days.filter { $0.date.hasPrefix(monthPrefix) }
         let monthTotals = totals(ofDays: monthDays)
 
-        // Against the same stretch of last month, not the whole of it: on the
-        // 6th, comparing six days to a full thirty would read as a collapse
-        // every time a month turned over.
         let dayOfMonth = calendar.component(.day, from: now)
         let lastMonthPrefix = calendar.date(byAdding: .month, value: -1, to: now).map(key.month)
         let lastMonthToDate = lastMonthPrefix.map { prefix in
@@ -153,24 +114,21 @@ struct UsageDigest: Equatable {
             ? Baseline(value: Double(lastMonthTokens), captionKey: "baseline.lastMonth")
             : nil
 
-        // --- Lifetime --------------------------------------------------------
         let lifetimeModels = merge(report.entries.map {
             ModelUsage(model: $0.model,
-                       vendor: .inferred(fromModelID: $0.model),
+                       app: UsageApp(id: $0.client),
                        totals: Totals(counts: $0.tokens, cost: $0.cost, messages: $0.messages))
         })
         let lifetimeTotals = Totals(
             counts: lifetimeModels.reduce(TokenCounts()) { $0 + $1.totals.counts },
             cost: lifetimeModels.reduce(0) { $0 + $1.totals.cost },
-            // The per-entry counts are sessions rather than requests; the
-            // report's own total is the figure tokscale stands behind.
             messages: report.messages
         )
         let milestone = nextMilestone(above: lifetimeTotals.tokens)
         let lifetimeBaseline = Baseline(value: Double(milestone),
                                         captionKey: "baseline.milestone")
 
-        let lifetimeVendors = group(lifetimeModels)
+        let lifetimeApps = group(lifetimeModels)
 
         let history = days.map { day in
             DayUsage(date: day.date,
@@ -182,27 +140,22 @@ struct UsageDigest: Equatable {
         return UsageDigest(
             today: Period(totals: todayTotals,
                           models: modelsOf(days: todayDays),
-                          vendors: group(modelsOf(days: todayDays)),
+                          apps: group(modelsOf(days: todayDays)),
                           baseline: todayBaseline),
             month: Period(totals: monthTotals,
                           models: modelsOf(days: monthDays),
-                          vendors: group(modelsOf(days: monthDays)),
+                          apps: group(modelsOf(days: monthDays)),
                           baseline: monthBaseline),
             lifetime: Period(totals: lifetimeTotals,
                              models: lifetimeModels,
-                             vendors: lifetimeVendors,
+                             apps: lifetimeApps,
                              baseline: lifetimeBaseline),
-            vendors: lifetimeVendors,
+            apps: lifetimeApps,
             days: history,
             generatedAt: now
         )
     }
 
-    /// The next round number above `value`, on a 1–2–5 ladder.
-    ///
-    /// A ladder rather than fixed rungs so it behaves the same at every scale:
-    /// somebody 40M in is chasing 50M, somebody 15B in is chasing 20B, and
-    /// neither has to be written down in advance.
     static func nextMilestone(above value: Int64) -> Int64 {
         guard value > 0 else { return 1_000_000 }
         var magnitude: Int64 = 1_000_000
@@ -215,8 +168,6 @@ struct UsageDigest: Equatable {
         return value
     }
 
-    // MARK: - Aggregation
-
     private static func totals(ofDays days: [GraphReport.Day]) -> Totals {
         Totals(counts: days.reduce(TokenCounts()) { $0 + $1.tokenBreakdown },
                cost: days.reduce(0) { $0 + $1.cost },
@@ -226,43 +177,109 @@ struct UsageDigest: Equatable {
     private static func modelsOf(days: [GraphReport.Day]) -> [ModelUsage] {
         merge(days.flatMap(\.clients).map {
             ModelUsage(model: $0.modelId,
-                       vendor: .inferred(fromModelID: $0.modelId),
+                       app: UsageApp(id: $0.client),
                        totals: Totals(counts: $0.tokens, cost: $0.cost, messages: $0.messages))
         })
     }
 
-    /// One row per model. The same model reached by two routes arrives as two
-    /// lines and has to be added up, or the table lists `deepseek-v4-flash`
-    /// three times and none of them is the real figure.
     private static func merge(_ models: [ModelUsage]) -> [ModelUsage] {
-        var byName: [String: ModelUsage] = [:]
+        var byKey: [String: ModelUsage] = [:]
         for model in models {
-            if let existing = byName[model.model] {
-                byName[model.model] = ModelUsage(model: existing.model, vendor: existing.vendor,
-                                                 totals: existing.totals + model.totals)
+            if let existing = byKey[model.id] {
+                byKey[model.id] = ModelUsage(model: existing.model, app: existing.app,
+                                             totals: existing.totals + model.totals)
             } else {
-                byName[model.model] = model
+                byKey[model.id] = model
             }
         }
-        return byName.values.sorted { $0.totals.tokens > $1.totals.tokens }
+        return byKey.values.sorted { $0.totals.tokens > $1.totals.tokens }
     }
 
-    private static func group(_ models: [ModelUsage]) -> [VendorUsage] {
-        Dictionary(grouping: models, by: \.vendor)
-            .map { vendor, models in
-                VendorUsage(vendor: vendor,
-                            totals: models.reduce(Totals()) { $0 + $1.totals },
-                            models: models.sorted { $0.totals.tokens > $1.totals.tokens })
+    private static func group(_ models: [ModelUsage]) -> [AppUsage] {
+        Dictionary(grouping: models, by: \.app)
+            .map { app, models in
+                AppUsage(app: app,
+                         totals: models.reduce(Totals()) { $0 + $1.totals },
+                         models: models.sorted { $0.totals.tokens > $1.totals.tokens })
             }
             .sorted { $0.totals.tokens > $1.totals.tokens }
     }
+
+    // MARK: - Claude Desktop supplement
+
+    private static func mergedGraph(_ graph: GraphReport,
+                                    desktop: ClaudeDesktopSupplement?) -> GraphReport {
+        guard let desktop, !desktop.contributions.isEmpty else { return graph }
+        var byDate = Dictionary(uniqueKeysWithValues: graph.contributions.map { ($0.date, $0) })
+        for day in desktop.contributions {
+            if let existing = byDate[day.date] {
+                byDate[day.date] = mergeDays(existing, day)
+            } else {
+                byDate[day.date] = day
+            }
+        }
+        let contributions = byDate.values.sorted { $0.date < $1.date }
+        return GraphReport(contributions: contributions)
+    }
+
+    private static func mergeDays(_ a: GraphReport.Day, _ b: GraphReport.Day) -> GraphReport.Day {
+        let clients = mergeClientLines(a.clients + b.clients)
+        return GraphReport.Day(
+            date: a.date,
+            tokenBreakdown: a.tokenBreakdown + b.tokenBreakdown,
+            clients: clients,
+            cost: a.cost + b.cost,
+            messages: a.messages + b.messages
+        )
+    }
+
+    private static func mergeClientLines(_ lines: [GraphReport.Day.Line]) -> [GraphReport.Day.Line] {
+        var byKey: [String: GraphReport.Day.Line] = [:]
+        for line in lines {
+            let key = "\(line.client)|\(line.modelId)"
+            if let existing = byKey[key] {
+                byKey[key] = GraphReport.Day.Line(
+                    client: line.client,
+                    modelId: line.modelId,
+                    tokens: existing.tokens + line.tokens,
+                    cost: existing.cost + line.cost,
+                    messages: existing.messages + line.messages
+                )
+            } else {
+                byKey[key] = line
+            }
+        }
+        return Array(byKey.values)
+    }
+
+    private static func mergedLifetime(_ report: UsageReport,
+                                        desktop: ClaudeDesktopSupplement?) -> UsageReport {
+        guard let desktop, !desktop.lifetimeEntries.isEmpty else { return report }
+        let entries = mergeLifetimeEntries(report.entries + desktop.lifetimeEntries)
+        return UsageReport(entries: entries,
+                           messages: report.messages + desktop.messagesParsed)
+    }
+
+    private static func mergeLifetimeEntries(_ entries: [UsageReport.Entry]) -> [UsageReport.Entry] {
+        var byKey: [String: UsageReport.Entry] = [:]
+        for entry in entries {
+            let key = "\(entry.client)|\(entry.model)"
+            if let existing = byKey[key] {
+                byKey[key] = UsageReport.Entry(
+                    client: entry.client,
+                    model: entry.model,
+                    tokens: existing.tokens + entry.tokens,
+                    cost: existing.cost + entry.cost,
+                    messages: existing.messages + entry.messages
+                )
+            } else {
+                byKey[key] = entry
+            }
+        }
+        return Array(byKey.values)
+    }
 }
 
-/// `yyyy-MM-dd` keys in the machine's own time zone, matching the strings
-/// tokscale writes. String comparison rather than parsed dates on purpose:
-/// these keys are already the vendor's idea of which day a session fell on,
-/// and re-deriving that through `Date` only introduces a time zone to get
-/// wrong.
 struct DayKey {
     private let dayFormatter: DateFormatter
     private let monthFormatter: DateFormatter
@@ -284,7 +301,6 @@ struct DayKey {
     func day(_ date: Date) -> String { dayFormatter.string(from: date) }
     func month(_ date: Date) -> String { monthFormatter.string(from: date) }
 
-    /// The day-of-month out of a `yyyy-MM-dd` key.
     func dayNumber(_ key: String) -> Int {
         Int(key.suffix(2)) ?? 0
     }

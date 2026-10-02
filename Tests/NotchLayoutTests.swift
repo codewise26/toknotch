@@ -535,7 +535,7 @@ final class RenameMigrationTests: XCTestCase {
         Preferences.migrateFromPreviousName(into: defaults, from: old)
 
         let preferences = Preferences(defaults: defaults)
-        XCTAssertTrue(preferences.showsRing(for: .openai))
+        XCTAssertTrue(preferences.showsRing(for: UsageApp(id: "codex")))
         XCTAssertEqual(preferences.notchVisibility, .alwaysShow)
     }
 
@@ -558,7 +558,7 @@ final class RenameMigrationTests: XCTestCase {
     func testMigratingWithNothingToMigrateIsHarmless() {
         let (defaults, _) = suite()
         Preferences.migrateFromPreviousName(into: defaults, from: "does.not.exist")
-        XCTAssertTrue(Preferences(defaults: defaults).enabledVendors.isEmpty)
+        XCTAssertTrue(Preferences(defaults: defaults).enabledApps.isEmpty)
     }
 }
 /// A tooltip is centred on the cell it belongs to, so the first and last

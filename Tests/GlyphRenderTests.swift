@@ -11,6 +11,10 @@ import SwiftUI
 final class GlyphRenderTests: XCTestCase {
     private var everyGlyph: [(String, RingGlyph)] {
         [("today", .today), ("month", .month), ("lifetime", .lifetime)]
+            + [("cursor", .app(UsageApp(id: "cursor"))),
+               ("codex", .app(UsageApp(id: "codex"))),
+               ("claude", .app(UsageApp(id: "claude"))),
+               ("claude-desktop", .app(UsageApp(id: "claude-desktop")))]
             + Vendor.allCases.map { ($0.rawValue, RingGlyph.vendor($0)) }
     }
 
@@ -51,6 +55,7 @@ final class GlyphRenderTests: XCTestCase {
 
     private static func tint(for glyph: RingGlyph) -> Color {
         if case .vendor(let vendor) = glyph { return vendor.ringTint }
+        if case .app(let app) = glyph { return app.ringTint }
         return .white
     }
 }

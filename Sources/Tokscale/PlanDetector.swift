@@ -18,6 +18,11 @@ struct DetectedPlan: Equatable {
         return Subscription(monthlyUSD: monthlyUSD, renewalDay: renewalDay ?? 1,
                             planID: planID)
     }
+
+    /// Detected identity without a list price — typical for enterprise seats.
+    var needsManualMonthlyPrice: Bool {
+        monthlyUSD == nil || monthlyUSD == 0
+    }
 }
 
 /// Finds the plans a Mac is already signed in to.
@@ -35,10 +40,16 @@ struct DetectedPlan: Equatable {
 /// that sit beside them in the same file are never read, never copied and never
 /// logged, and nothing from any of this leaves the machine.
 enum PlanDetector {
-    static func detect(fileManager: FileManager = .default) -> [Vendor: DetectedPlan] {
-        var found: [Vendor: DetectedPlan] = [:]
-        if let claude = detectClaude(fileManager: fileManager) { found[.anthropic] = claude }
-        if let codex = detectCodex(fileManager: fileManager) { found[.openai] = codex }
+    static func detect(fileManager: FileManager = .default) -> [UsageApp: DetectedPlan] {
+        var found: [UsageApp: DetectedPlan] = [:]
+        if let claude = detectClaude(fileManager: fileManager) {
+            found[UsageApp(id: "claude")] = claude
+        } else if let desktop = detectClaudeDesktop(fileManager: fileManager) {
+            found[UsageApp.claudeDesktop] = desktop
+        }
+        if let codex = detectCodex(fileManager: fileManager) {
+            found[UsageApp(id: "codex")] = codex
+        }
         return found
     }
 
@@ -55,13 +66,24 @@ enum PlanDetector {
               let account = root["oauthAccount"] as? [String: Any]
         else { return nil }
 
-        // An account billed some other way — API credit, an enterprise
-        // agreement — has no monthly figure to compare against.
         let billing = account["billingType"] as? String
-        guard billing == nil || billing == "stripe_subscription" else { return nil }
+        let type = account["organizationType"] as? String
+        let known = type.flatMap { PlanCatalog.plan(id: $0, for: .anthropic) }
 
-        guard let type = account["organizationType"] as? String else { return nil }
-        let known = PlanCatalog.plan(id: type, for: .anthropic)
+        // Stripe subscriptions carry a list price; enterprise and API-billed
+        // accounts still name themselves so payback can use a custom seat cost.
+        if billing != nil && billing != "stripe_subscription" {
+            let id = type ?? "claude_enterprise"
+            return DetectedPlan(
+                planID: id,
+                name: known?.name ?? readable(id),
+                monthlyUSD: nil,
+                renewalDay: (account["subscriptionCreatedAt"] as? String).flatMap { Self.day(ofISO: $0) },
+                source: "~/.claude.json"
+            )
+        }
+
+        guard let type else { return nil }
 
         return DetectedPlan(
             planID: type,
@@ -69,6 +91,22 @@ enum PlanDetector {
             monthlyUSD: known?.monthlyUSD,
             renewalDay: (account["subscriptionCreatedAt"] as? String).flatMap { Self.day(ofISO: $0) },
             source: "~/.claude.json"
+        )
+    }
+
+    /// Claude Desktop keeps no JSONL ledger tokscale can scan. We still surface
+    /// that the app is present so Settings can explain the gap.
+    static func detectClaudeDesktop(fileManager: FileManager = .default,
+                                    configPath: String? = nil) -> DetectedPlan? {
+        let config = configPath ?? NSString(string: "~/Library/Application Support/Claude/config.json")
+            .expandingTildeInPath
+        guard fileManager.isReadableFile(atPath: config) else { return nil }
+        return DetectedPlan(
+            planID: "claude_enterprise",
+            name: "Claude Desktop",
+            monthlyUSD: nil,
+            renewalDay: nil,
+            source: "Claude.app"
         )
     }
 
@@ -132,11 +170,15 @@ enum PlanDetector {
     /// The day of the month out of an ISO 8601 timestamp.
     static func day(ofISO string: String, calendar: Calendar = .current) -> Int? {
         // Both shapes occur: Claude writes fractional seconds, OpenAI does not.
+        // Vendors record these in UTC; the renewal *day* is the UTC calendar day.
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let plain = ISO8601DateFormatter()
         let date = withFraction.date(from: string) ?? plain.date(from: string)
-        return date.map { calendar.component(.day, from: $0) }
+        guard let date else { return nil }
+        var utc = calendar
+        utc.timeZone = TimeZone(secondsFromGMT: 0) ?? calendar.timeZone
+        return utc.component(.day, from: date)
     }
 
     /// `claude_max_20x` → `Claude Max 20x`, for a plan id we do not have a

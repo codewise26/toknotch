@@ -14,8 +14,8 @@ enum RingBuilder {
     static let maxRowsPerCard = 2 + modelsPerCard
 
     static func rings(from digest: UsageDigest,
-                      vendors enabled: Set<Vendor>,
-                      subscriptions: [Vendor: Subscription] = [:],
+                      apps enabled: Set<String>,
+                      subscriptions: [String: Subscription] = [:],
                       language: AppLanguage,
                       now: Date = Date(),
                       calendar: Calendar = .current) -> [RingSnapshot] {
@@ -30,14 +30,14 @@ enum RingBuilder {
             }
             return period(kind, slice, digest, language, now, calendar)
         }
-        // In the order the digest found them — busiest vendor first — so
+        // In the order the digest found them — busiest app first — so
         // turning several on gives a stack that reads as a ranking.
-        rings += digest.vendors
-            .filter { enabled.contains($0.vendor) }
+        rings += digest.apps
+            .filter { enabled.contains($0.app.id) }
             .map { usage in
-                vendor(in: usage, of: digest,
-                       subscription: subscriptions[usage.vendor].flatMap { $0.isActive ? $0 : nil },
-                       language, now, calendar)
+                app(in: usage, of: digest,
+                    subscription: subscriptions[usage.app.id],
+                    language, now, calendar)
             }
         return rings
     }
@@ -52,7 +52,7 @@ enum RingBuilder {
         case .today:    (title, glyph) = (language.t("ring.today.title"), .today)
         case .month:    (title, glyph) = (language.t("ring.month.title"), .month)
         case .lifetime: (title, glyph) = (language.t("ring.lifetime.title"), .lifetime)
-        case .vendor(let v): (title, glyph) = (v.title(language), .vendor(v))
+        case .app(let app): (title, glyph) = (app.title(language), .app(app))
         }
         return RingSnapshot(
             kind: kind, title: title, caption: "",
@@ -121,60 +121,82 @@ enum RingBuilder {
                           percent(period.fraction, language))
     }
 
-    // MARK: - Vendor rings
+    // MARK: - App rings
 
-    private static func vendor(in usage: UsageDigest.VendorUsage,
-                               of digest: UsageDigest,
-                               subscription: Subscription?,
-                               _ language: AppLanguage,
-                               _ now: Date,
-                               _ calendar: Calendar) -> RingSnapshot {
+    private static func app(in usage: UsageDigest.AppUsage,
+                            of digest: UsageDigest,
+                            subscription: Subscription?,
+                            _ language: AppLanguage,
+                            _ now: Date,
+                            _ calendar: Calendar) -> RingSnapshot {
         let lifetime = max(1, digest.lifetime.totals.tokens)
         let share = Double(usage.totals.tokens) / Double(lifetime)
-        let tokens = UsageFormat.tokens(usage.totals.tokens, language)
+        let allTimeTokens = UsageFormat.tokens(usage.totals.tokens, language)
 
-        let payback = subscription.map { plan -> Payback in
-            let period = BillingPeriod.current(renewalDay: plan.renewalDay,
+        if let subscription {
+            let period = BillingPeriod.current(renewalDay: subscription.renewalDay,
                                                now: now, calendar: calendar)
-            return Payback(subscription: plan, period: period,
-                           earned: digest.totals(for: usage.vendor, in: period,
-                                                 calendar: calendar).cost)
-        }
+            let periodTotals = digest.totals(for: usage.app, in: period, calendar: calendar)
+            let periodTokens = UsageFormat.tokens(periodTotals.tokens, language)
+            let periodSince = language.t("settings.periodSince",
+                                         UsageFormat.day(period.start, language, calendar: calendar))
 
-        // With a plan, the question this card answers is "has it paid for
-        // itself this period" — so that is the hero, and the lifetime figures
-        // move below the rule. Without one, the question is simply how much
-        // this vendor accounts for.
-        if let payback {
             var rows: [MetricRow] = [
+                MetricRow(id: "periodCost",
+                          label: language.t("row.equivalentCost"),
+                          value: UsageFormat.money(periodTotals.cost, language),
+                          startsGroup: true),
                 MetricRow(id: "lifetime",
                           label: language.t("row.lifetimeUsage"),
-                          value: "\(tokens) · \(UsageFormat.money(usage.totals.cost, language))",
-                          startsGroup: true)
+                          value: "\(allTimeTokens) · \(UsageFormat.money(usage.totals.cost, language))")
             ]
-                let verdict = language.t(payback.hasPaidBack ? "payback.paidBack"
-                                                          : "payback.onTheWay")
+
+            let scope = appModelScope(in: usage, of: digest, period: period,
+                                      periodTotals: periodTotals, language: language,
+                                      tint: usage.app.ringTint, calendar: calendar)
+
+            if subscription.isActive {
+                let payback = Payback(subscription: subscription, period: period,
+                                      earned: periodTotals.cost)
+                rows.append(MetricRow(id: "payback",
+                                      label: language.t("settings.thisPeriod"),
+                                      value: UsageFormat.multiple(payback.multiple, language)))
+                return RingSnapshot(
+                    kind: .app(usage.app), title: usage.app.title(language),
+                    caption: periodLabel(payback, language, calendar),
+                    glyph: .app(usage.app),
+                    headline: allTimeTokens,
+                    hero: periodTokens,
+                    heroCaption: periodSince,
+                    heroTint: usage.app.ringTint,
+                    heroFraction: payback.scale.fill(payback.multiple),
+                    heroMarker: payback.scale.breakEven,
+                    fraction: share, tint: usage.app.ringTint,
+                    rows: rows,
+                    modelRows: scope.period,
+                    allTimeModelRows: scope.allTime,
+                    showsModelScopeTabs: scope.showsTabs,
+                    modelScopePeriodTitle: scope.periodTitle,
+                    modelScopeAllTimeTitle: scope.allTimeTitle,
+                    moreFormat: language.t("card.moreModels")
+                )
+            }
+
             return RingSnapshot(
-                kind: .vendor(usage.vendor), title: usage.vendor.title(language),
-                caption: periodLabel(payback, language, calendar),
-                glyph: .vendor(usage.vendor),
-                headline: tokens,
-                hero: UsageFormat.multiple(payback.multiple, language),
-                heroCaption: language.t("payback.hero",
-                                        verdict,
-                                        UsageFormat.money(payback.earned, language),
-                                        UsageFormat.money(payback.subscription.monthlyUSD, language)),
-                // The vendor's own colour, like the rest of its card. Whether the
-                // plan has paid back is said in words just below; a shared
-                // verdict colour made every vendor's card look like one
-                // another's.
-                heroTint: usage.vendor.ringTint,
-                heroFraction: payback.scale.fill(payback.multiple),
-                heroMarker: payback.scale.breakEven,
-                fraction: share, tint: usage.vendor.ringTint,
+                kind: .app(usage.app), title: usage.app.title(language),
+                caption: periodSince,
+                glyph: .app(usage.app),
+                headline: allTimeTokens,
+                hero: periodTokens,
+                heroCaption: periodSince,
+                heroTint: usage.app.ringTint,
+                fraction: share, tint: usage.app.ringTint,
                 rows: rows,
-                modelRows: modelRows(usage.models, of: usage.totals.tokens, language,
-                                     tint: usage.vendor.ringTint),
+                modelRows: scope.period,
+                allTimeModelRows: scope.allTime,
+                showsModelScopeTabs: scope.showsTabs,
+                modelScopePeriodTitle: scope.periodTitle,
+                modelScopeAllTimeTitle: scope.allTimeTitle,
                 moreFormat: language.t("card.moreModels")
             )
         }
@@ -185,18 +207,18 @@ enum RingBuilder {
                       value: UsageFormat.money(usage.totals.cost, language))
         ]
         return RingSnapshot(
-            kind: .vendor(usage.vendor), title: usage.vendor.title(language),
-            caption: language.t("vendor.allTime"),
-            glyph: .vendor(usage.vendor),
-            headline: tokens,
-            hero: tokens,
-            heroCaption: language.t("vendor.share", UsageFormat.share(share, language)),
-            heroTint: usage.vendor.ringTint,
+            kind: .app(usage.app), title: usage.app.title(language),
+            caption: language.t("app.allTime"),
+            glyph: .app(usage.app),
+            headline: allTimeTokens,
+            hero: allTimeTokens,
+            heroCaption: language.t("app.share", UsageFormat.share(share, language)),
+            heroTint: usage.app.ringTint,
             heroFraction: share,
-            fraction: share, tint: usage.vendor.ringTint,
+            fraction: share, tint: usage.app.ringTint,
             rows: rows,
             modelRows: modelRows(usage.models, of: usage.totals.tokens, language,
-                                 tint: usage.vendor.ringTint),
+                                 tint: usage.app.ringTint),
             moreFormat: language.t("card.moreModels")
         )
     }
@@ -205,6 +227,39 @@ enum RingBuilder {
                                     _ calendar: Calendar) -> String {
         language.t("payback.period",
                    UsageFormat.day(payback.period.start, language, calendar: calendar))
+    }
+
+    private struct AppModelScope {
+        let period: [MetricRow]
+        let allTime: [MetricRow]
+        let showsTabs: Bool
+        let periodTitle: String
+        let allTimeTitle: String
+    }
+
+    /// Period and lifetime model tables when the app has a configured plan
+    /// (billing renewal day in Settings). Without a plan, tabs stay off and
+    /// only the lifetime list is built at the call site.
+    private static func appModelScope(in usage: UsageDigest.AppUsage,
+                                      of digest: UsageDigest,
+                                      period: BillingPeriod,
+                                      periodTotals: UsageDigest.Totals,
+                                      language: AppLanguage,
+                                      tint: Color,
+                                      calendar: Calendar) -> AppModelScope {
+        let periodModels = digest.models(for: usage.app, in: period, calendar: calendar)
+        let periodTokenTotal = max(1, periodTotals.tokens)
+        let periodRows = modelRows(periodModels, of: periodTokenTotal, language,
+                                   tint: tint, idPrefix: "model.period")
+        let allTimeRows = modelRows(usage.models, of: usage.totals.tokens, language,
+                                    tint: tint, idPrefix: "model.alltime")
+        return AppModelScope(
+            period: periodRows,
+            allTime: allTimeRows,
+            showsTabs: true,
+            periodTitle: language.t("settings.thisPeriod"),
+            allTimeTitle: language.t("app.allTime")
+        )
     }
 
     // MARK: - Supporting rows
@@ -236,16 +291,17 @@ enum RingBuilder {
     private static func modelRows(_ models: [UsageDigest.ModelUsage],
                                   of total: Int64,
                                   _ language: AppLanguage,
-                                  tint: Color? = nil) -> [MetricRow] {
+                                  tint: Color? = nil,
+                                  idPrefix: String = "model") -> [MetricRow] {
         guard total > 0 else { return [] }
         return models.prefix(NotchLayout.modelCeiling).enumerated().map { index, model in
             let share = Double(model.totals.tokens) / Double(total)
             return MetricRow(
-                id: "model.\(index)",
+                id: "\(idPrefix).\(index)",
                 label: UsageFormat.modelName(model.model),
                 value: "\(UsageFormat.tokens(model.totals.tokens, language)) · \(UsageFormat.moneyShort(model.totals.cost, language))",
                 fraction: share,
-                tint: tint ?? model.vendor.ringTint,
+                tint: tint ?? model.app.ringTint,
                 startsGroup: index == 0
             )
         }

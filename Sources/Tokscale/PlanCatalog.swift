@@ -60,4 +60,28 @@ enum PlanCatalog {
     static func menu(for vendor: Vendor) -> [Plan] {
         [.none] + plans(for: vendor) + [.custom]
     }
+
+    static func plans(for app: UsageApp) -> [Plan] {
+        switch UsageAppPlanKind.kind(for: app) {
+        case .openAI:    return plans(for: .openai)
+        case .anthropic: return plans(for: .anthropic)
+        case .cursorEnterprise: return []
+        case .usageBilled: return []
+        }
+    }
+
+    static func plan(id: String, for app: UsageApp) -> Plan? {
+        plans(for: app).first { $0.id == id }
+    }
+
+    static func menu(for app: UsageApp) -> [Plan] {
+        switch UsageAppPlanKind.kind(for: app) {
+        case .cursorEnterprise:
+            return [.none, .custom]
+        case .usageBilled:
+            return []
+        default:
+            return [.none] + plans(for: app) + [.custom]
+        }
+    }
 }

@@ -40,7 +40,8 @@ struct NotchRootView: View {
                    model.isExpanded {
                     TooltipCard(ring: ring, direction: model.edge.tooltipDirection,
                                 modelLimit: model.modelLimit(for: ring),
-                                canExpand: model.canExpand(ring))
+                                canExpand: model.canExpand(ring),
+                                onMoreTap: { model.toggleExpansion() })
                         // Deliberately *no* `.id` here: the card is one object
                         // that travels and resizes between cells, which reads
                         // far better than one card leaving and another arriving.
@@ -190,7 +191,7 @@ struct NotchRootView: View {
     ) -> CGPoint {
         let card = model.edge.isVertical
             ? NotchLayout.cardWidth
-            : ring.cardHeight(showingModels: model.modelLimit(for: ring))
+            : ring.cardHeightForHover(showingModels: model.modelLimit(for: ring))
         return place.point(
             along: model.slack + model.ringCenter(index: index),
             across: model.tooltipInset + (NotchLayout.tailLength + card) / 2

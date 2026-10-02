@@ -2,6 +2,7 @@
 
 "about.tagline" = "كم مرة استردّت كل خطة ذكاء اصطناعي تكلفتها؟";
 "about.version" = "الإصدار %@";
+"about.upstream" = "Fork maintained by codewise26. Based on TokNotch by Reff Wu (MIT).";
 "baseline.against" = "%2$@ من %1$@";
 "baseline.lastMonth" = "الأيام نفسها من الشهر الماضي";
 "baseline.milestone" = "المحطة التالية";
@@ -80,6 +81,10 @@
 "settings.today" = "اليوم";
 "settings.upToDate" = "محدّث";
 "settings.updateAvailable" = "الإصدار %@ متوفر";
+"settings.apps" = "Apps";
+"settings.allTimeUsage" = "All time %@ · %@";
+"settings.periodSince" = "Since %@";
+"settings.periodUsage" = "This period %@ · %@";
 "settings.vendors" = "المزوّدون";
 "status.exited" = "توقف tokscale بالرمز %d. شغّله في Terminal لمعرفة السبب.";
 "status.noNode" = "تعذر بدء tokscale — لم يُعثر على node. إذا كنت تدير node عبر nvm أو fnm فتأكد من وجوده في موقع قياسي.";
@@ -88,6 +93,12 @@
 "status.reading" = "جارٍ قراءة بيانات tokscale…";
 "status.timedOut" = "استغرق tokscale وقتًا طويلًا للرد. ستُعاد المحاولة قريبًا.";
 "status.undecodable" = "تعذر تحليل مخرجات tokscale — جرّب: brew upgrade tokscale";
+"app.allTime" = "All time";
+"app.name.claudeCode" = "Claude Code";
+"app.name.claudeDesktop" = "Claude Desktop";
+"app.name.codex" = "Codex CLI";
+"app.name.cursor" = "Cursor";
+"app.share" = "%@ of everything";
 "vendor.allTime" = "طوال الوقت";
 "vendor.name.alibaba" = "Qwen";
 "vendor.name.moonshot" = "Moonshot Kimi";
@@ -158,3 +169,13 @@
 "whatsNew.v128.icon.title" = "الإطار الداكن في كل مكان";
 "whatsNew.version" = "الإصدار %@";
 "whatsNew.welcome" = "مرحبًا بك في TokNotch";
+"settings.claudeDesktopSubtitle" = "Cowork and local-agent sessions are counted from Claude Desktop’s on-disk JSONL. Main-window chat is not logged locally—enable the Claude Desktop ring for that bucket, or use Claude Code for ~/.claude/projects tracking.";
+"settings.claudeDesktopTitle" = "Claude Desktop detected";
+"settings.copyCursorLogin" = "Copy login command";
+"settings.cursorLoginSubtitle" = "Cursor usage is read from the Cursor API after you link tokscale once in Terminal.";
+"settings.cursorLoginTitle" = "Link Cursor for usage";
+"settings.dataSources" = "Data sources";
+"settings.dataSourcesFootnote" = "Matches what the bundled tokscale binary can scan on this Mac.";
+"settings.enterSeatCost" = "Choose Custom… and enter your monthly seat cost";
+"settings.integrations" = "Integrations";
+"settings.scanDataSources" = "tokscale clients";

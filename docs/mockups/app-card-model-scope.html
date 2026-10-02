@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TokNotch — App card model scope tabs (v2)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            card: '#000000',
+            rule: '#424242',
+            track: '#2D2D2D',
+            muted: '#808080',
+            cursor: '#D97757',
+          },
+          fontFamily: { sans: ['-apple-system', 'BlinkMacSystemFont', 'SF Pro Text', 'Segoe UI', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <style>
+    .bar-fill { height: 10px; border-radius: 999px; }
+    .note { font-size: 12px; color: #525252; }
+    /* Variant A v2: +50% height, strict 50/50 columns */
+    .seg-track {
+      background: #2D2D2D;
+      border-radius: 8px;
+      padding: 3px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      width: 100%;
+    }
+    .seg-btn {
+      border-radius: 6px;
+      padding: 5px 8px;
+      min-height: 28px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #808080;
+      text-align: center;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-width: 0;
+    }
+    .seg-btn.active { background: #424242; color: #fff; }
+    /* Previous compact (for comparison) */
+    .seg-track--old {
+      border-radius: 6px;
+      padding: 2px;
+      display: flex;
+      gap: 1px;
+    }
+    .seg-track--old .seg-btn {
+      flex: 1;
+      border-radius: 5px;
+      padding: 3px 7px;
+      min-height: 0;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body class="bg-zinc-200 min-h-screen p-8 font-sans text-white">
+  <header class="max-w-4xl mx-auto mb-8 text-zinc-800">
+    <h1 class="text-lg font-semibold">Model scope pill — v2</h1>
+    <p class="note mt-1">Taller track (+50% height) and <strong>equal 50/50</strong> segments (grid, not content-sized). Compare OLD vs NEW below.</p>
+  </header>
+
+  <div class="max-w-4xl mx-auto grid md:grid-cols-2 gap-10 items-start">
+    <section>
+      <p class="note mb-3 uppercase tracking-wide">NEW — approve for Swift</p>
+      <article class="bg-card rounded-[25px] p-4 w-[300px] shadow-xl" data-card="new">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-5 h-5 rounded bg-cursor/30 flex items-center justify-center text-[10px] text-cursor">◆</div>
+          <span class="text-sm font-semibold">Cursor</span>
+          <span class="ml-auto text-xs text-muted">since 1 Oct</span>
+        </div>
+        <p class="text-3xl font-semibold text-cursor leading-none">44.4M</p>
+        <p class="text-xs text-muted mt-1">Since 1 Oct</p>
+        <div class="mt-3 h-[13px] rounded-full bg-track w-full overflow-hidden">
+          <div class="h-full bg-cursor rounded-full" style="width: 42%"></div>
+        </div>
+        <div class="mt-4 space-y-3 text-xs">
+          <div class="flex justify-between gap-4"><span>Equivalent API cost</span><span class="text-muted">US$16.57</span></div>
+          <div class="h-px bg-rule"></div>
+          <div class="flex justify-between gap-4"><span>All-time usage</span><span class="text-muted">802.1M · US$610.32</span></div>
+          <div class="flex justify-between gap-4"><span>This period</span><span class="text-cursor font-semibold">0.3×</span></div>
+        </div>
+        <div class="mt-3 seg-track" role="tablist">
+          <button type="button" class="seg-btn active" data-scope="period" data-variant="new">This period</button>
+          <button type="button" class="seg-btn" data-scope="alltime" data-variant="new">All time</button>
+        </div>
+        <div class="mt-3 space-y-3 model-list" data-list="new"></div>
+        <p class="text-center text-xs text-muted mt-3">3 more models ˅</p>
+      </article>
+    </section>
+
+    <section>
+      <p class="note mb-3 uppercase tracking-wide">OLD — shipped compact</p>
+      <article class="bg-card rounded-[25px] p-4 w-[300px] shadow-xl opacity-90" data-card="old">
+        <div class="flex items-center gap-2 mb-3">
+          <div class="w-5 h-5 rounded bg-cursor/30 flex items-center justify-center text-[10px] text-cursor">◆</div>
+          <span class="text-sm font-semibold">Cursor</span>
+          <span class="ml-auto text-xs text-muted">since 1 Oct</span>
+        </div>
+        <p class="text-3xl font-semibold text-cursor leading-none">44.4M</p>
+        <div class="mt-4 space-y-3 text-xs">
+          <div class="flex justify-between"><span>Equivalent API cost</span><span class="text-muted">US$16.57</span></div>
+        </div>
+        <div class="mt-3 seg-track seg-track--old" role="tablist">
+          <button type="button" class="seg-btn active" data-scope="period" data-variant="old">This period</button>
+          <button type="button" class="seg-btn" data-scope="alltime" data-variant="old">All time</button>
+        </div>
+        <p class="text-center text-xs text-muted mt-6">(reference only)</p>
+      </article>
+    </section>
+  </div>
+
+  <script>
+    const periodModels = [
+      { name: 'composer-2.5-fast', tokens: '12.1M', cost: 'US$4.2', pct: 0.55 },
+      { name: 'claude-opus-4-6', tokens: '8.4M', cost: 'US$9.1', pct: 0.32 },
+      { name: 'default', tokens: '2.9M', cost: 'US$3.3', pct: 0.13 },
+    ];
+    const allTimeModels = [
+      { name: 'composer-2.5-fast', tokens: '518.3M', cost: 'US$399', pct: 0.65 },
+      { name: 'claude-opus-4-6', tokens: '142.5M', cost: 'US$150', pct: 0.22 },
+      { name: 'default', tokens: '52.9M', cost: 'US$16', pct: 0.08 },
+    ];
+
+    function renderList(container, scope) {
+      const models = scope === 'period' ? periodModels : allTimeModels;
+      container.innerHTML = models.map(m => `
+        <div>
+          <div class="flex justify-between gap-2 text-xs">
+            <span class="truncate">${m.name}</span>
+            <span class="text-muted shrink-0">${m.tokens} · ${m.cost}</span>
+          </div>
+          <div class="mt-1.5 bg-track rounded-full bar-fill">
+            <div class="bar-fill bg-cursor" style="width: ${m.pct * 100}%"></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    document.querySelectorAll('.model-list').forEach(el => renderList(el, 'period'));
+
+    document.querySelectorAll('[data-scope]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const variant = btn.dataset.variant;
+        const scope = btn.dataset.scope;
+        const card = document.querySelector(`[data-card="${variant}"]`);
+        card.querySelectorAll(`[data-variant="${variant}"]`).forEach(b => {
+          b.classList.toggle('active', b.dataset.scope === scope);
+        });
+        const list = card.querySelector('.model-list');
+        if (list) renderList(list, scope);
+      });
+    });
+  </script>
+</body>
+</html>

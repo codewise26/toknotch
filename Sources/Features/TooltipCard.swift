@@ -121,6 +121,8 @@ private struct TooltipShell<Content: View>: View {
             content
                 .padding(NotchLayout.cardPadding)
                 .frame(width: NotchLayout.cardWidth, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(width: NotchLayout.cardWidth, height: height, alignment: .top)
         .clipShape(RoundedRectangle(cornerRadius: NotchLayout.cardCorner, style: .circular))
@@ -211,6 +213,55 @@ private struct MetricRowView: View {
     }
 }
 
+/// Variant A — full-width pill segment on the bar track (see mockup).
+private struct ModelScopeTabPicker: View {
+    @Binding var scope: ModelUsageScope
+    let periodTitle: String
+    let allTimeTitle: String
+
+    private let font = Font.system(size: Design.fontSize(capPixels: 16), weight: .medium)
+    private let trackCorner = Design.px(8)
+    private let segmentCorner = Design.px(6)
+    private let trackPadding = Design.px(3)
+
+    var body: some View {
+        HStack(spacing: Design.px(2)) {
+            segment(periodTitle, .period)
+            segment(allTimeTitle, .allTime)
+        }
+        .padding(trackPadding)
+        .frame(height: NotchLayout.modelScopeTabsBlockHeight)
+        .background(
+            RoundedRectangle(cornerRadius: trackCorner, style: .continuous)
+                .fill(Palette.barTrack)
+        )
+        .frame(maxWidth: .infinity)
+    }
+
+    private func segment(_ title: String, _ choice: ModelUsageScope) -> some View {
+        let active = scope == choice
+        return Button {
+            scope = choice
+        } label: {
+            Text(title)
+                .font(font)
+                .foregroundStyle(active ? Palette.textPrimary : Palette.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(maxWidth: .infinity)
+                .frame(height: NotchLayout.modelScopeSegmentHeight)
+                .background(
+                    RoundedRectangle(cornerRadius: segmentCorner, style: .continuous)
+                        .fill(active ? Palette.cardRule : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+    }
+}
+
 struct TooltipCard: View {
     let ring: RingSnapshot
     /// Which way the card sits from the notch, which follows from the edge.
@@ -222,12 +273,22 @@ struct TooltipCard: View {
     /// screen's limit is what is holding the rest back, so the line stops
     /// inviting a click that cannot do anything.
     var canExpand: Bool = false
+    var onMoreTap: (() -> Void)? = nil
+
+    @State private var modelScope: ModelUsageScope = .period
+
+    private var activeScope: ModelUsageScope {
+        ring.showsModelScopeTabs ? modelScope : .period
+    }
 
     /// The same figure the hover region and the panel budget use.
-    private var height: CGFloat { ring.cardHeight(showingModels: modelLimit) }
+    private var height: CGFloat { ring.cardHeightForHover(showingModels: modelLimit) }
 
-    private var shownRows: [MetricRow] { ring.rows(showingModels: modelLimit) }
-    private var hidden: Int { ring.hiddenModels(after: modelLimit) }
+    private var shownModels: [MetricRow] {
+        Array(ring.scopedModelRows(for: activeScope).prefix(modelLimit))
+    }
+
+    private var hidden: Int { ring.hiddenModels(after: modelLimit, scope: activeScope) }
 
     var body: some View {
         TooltipShell(height: height, direction: direction) {
@@ -255,7 +316,7 @@ struct TooltipCard: View {
                         .padding(.top, NotchLayout.headerToBlock)
                 } else {
                     hero
-                    ForEach(Array(shownRows.enumerated()), id: \.element.id) { index, row in
+                    ForEach(Array(ring.rows.enumerated()), id: \.element.id) { index, row in
                         if row.startsGroup, index > 0 {
                             Rectangle()
                                 .fill(Palette.cardRule)
@@ -267,14 +328,42 @@ struct TooltipCard: View {
                                      : (row.startsGroup ? NotchLayout.groupSpacing
                                                         : NotchLayout.rowSpacing))
                     }
+                    if ring.showsModelScopeTabs {
+                        ModelScopeTabPicker(
+                            scope: $modelScope,
+                            periodTitle: ring.modelScopePeriodTitle,
+                            allTimeTitle: ring.modelScopeAllTimeTitle
+                        )
+                        .padding(.top, NotchLayout.modelScopeTabsTopGap)
+                    }
+                    ForEach(Array(shownModels.enumerated()), id: \.element.id) { index, row in
+                        if row.startsGroup, index > 0 {
+                            Rectangle()
+                                .fill(Palette.cardRule)
+                                .frame(height: NotchLayout.hairline)
+                                .padding(.top, NotchLayout.groupSpacing)
+                        }
+                        MetricRowView(row: row)
+                            .padding(.top, modelRowTopPadding(index: index, row: row))
+                    }
                     if hidden > 0 { more }
                 }
             }
             // Contents swap wholesale between rings rather than interpolating
             // from one ring's numbers into another's.
             .id(ring.id)
+            .onChange(of: ring.id) { _, _ in modelScope = .period }
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+    }
+
+    private func modelRowTopPadding(index: Int, row: MetricRow) -> CGFloat {
+        if index == 0 {
+            return ring.showsModelScopeTabs
+                ? NotchLayout.rowSpacing
+                : (ring.rows.isEmpty ? NotchLayout.headerToBlock : NotchLayout.rowSpacing)
+        }
+        return row.startsGroup ? NotchLayout.groupSpacing : NotchLayout.rowSpacing
     }
 
     /// The line that says what is not on the card, and whether asking would
@@ -300,6 +389,11 @@ struct TooltipCard: View {
         // made it read as one more row whose value had gone missing.
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.top, NotchLayout.rowSpacing)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard canExpand else { return }
+            onMoreTap?()
+        }
     }
 
     /// The answer, at the size an answer deserves.

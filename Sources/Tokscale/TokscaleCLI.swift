@@ -119,6 +119,29 @@ enum TokscaleCLI {
         _ = try await launch(["antigravity", "sync"], timeout: 90)
     }
 
+    /// Cursor IDE usage is not in local agent logs; tokscale pulls it from the
+    /// Cursor API into `cursor-cache` after `cursor login` and `cursor sync`.
+    static func syncCursor() async throws {
+        _ = try await launch(["cursor", "sync"], timeout: 120)
+    }
+
+    /// Whether tokscale has a saved Cursor account to sync against.
+    static func cursorIsLinked() async -> Bool {
+        guard let data = try? await launch(["cursor", "status"], timeout: 30),
+              let text = String(data: data, encoding: .utf8)
+        else { return false }
+        return !text.localizedCaseInsensitiveContains("no saved cursor accounts")
+    }
+
+    /// Human-readable scan of which tools tokscale can see on this Mac.
+    static func clientsReport() async throws -> String {
+        let data = try await launch(["clients"], timeout: 60)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw Failure.undecodable("clients")
+        }
+        return text
+    }
+
     private static func homeArguments(_ home: String?) -> [String] {
         home.map { ["--home", $0] } ?? []
     }
@@ -246,20 +269,23 @@ struct GraphReport: Decodable, Equatable {
 
         /// One model, as reached through one route, on that day.
         struct Line: Decodable, Equatable {
+            let client: String
             let modelId: String
             let tokens: TokenCounts
             let cost: Double
             let messages: Int
 
-            enum CodingKeys: String, CodingKey { case modelId, tokens, cost, messages }
+            enum CodingKeys: String, CodingKey { case client, modelId, tokens, cost, messages }
 
-            init(modelId: String, tokens: TokenCounts, cost: Double, messages: Int) {
-                self.modelId = modelId; self.tokens = tokens
+            init(client: String = "unknown", modelId: String, tokens: TokenCounts,
+                 cost: Double, messages: Int) {
+                self.client = client; self.modelId = modelId; self.tokens = tokens
                 self.cost = cost; self.messages = messages
             }
 
             init(from decoder: Decoder) throws {
                 let c = try decoder.container(keyedBy: CodingKeys.self)
+                client   = try c.decodeIfPresent(String.self, forKey: .client) ?? "unknown"
                 modelId  = try c.decodeIfPresent(String.self, forKey: .modelId) ?? "unknown"
                 tokens   = try c.decodeIfPresent(TokenCounts.self, forKey: .tokens) ?? TokenCounts()
                 cost     = try c.decodeIfPresent(Double.self, forKey: .cost) ?? 0
@@ -302,22 +328,25 @@ struct GraphReport: Decodable, Equatable {
 /// `tokscale --json` — no day dimension, but it reaches all the way back.
 struct UsageReport: Decodable, Equatable {
     struct Entry: Decodable, Equatable {
+        let client: String
         let model: String
         let tokens: TokenCounts
         let cost: Double
         let messages: Int
 
         enum CodingKeys: String, CodingKey {
-            case model, cost, messageCount, input, output, cacheRead, cacheWrite, reasoning
+            case client, model, cost, messageCount, input, output, cacheRead, cacheWrite, reasoning
         }
 
-        init(model: String, tokens: TokenCounts, cost: Double, messages: Int) {
-            self.model = model; self.tokens = tokens
+        init(client: String = "unknown", model: String, tokens: TokenCounts,
+             cost: Double, messages: Int) {
+            self.client = client; self.model = model; self.tokens = tokens
             self.cost = cost; self.messages = messages
         }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
+            client   = try c.decodeIfPresent(String.self, forKey: .client) ?? "unknown"
             model    = try c.decodeIfPresent(String.self, forKey: .model) ?? "unknown"
             cost     = try c.decodeIfPresent(Double.self, forKey: .cost) ?? 0
             messages = try c.decodeIfPresent(Int.self, forKey: .messageCount) ?? 0

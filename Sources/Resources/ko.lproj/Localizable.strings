@@ -2,6 +2,7 @@
 
 "about.tagline" = "내 AI 요금제, 몇 배나 본전을 뽑았을까?";
 "about.version" = "버전 %@";
+"about.upstream" = "Fork maintained by codewise26. Based on TokNotch by Reff Wu (MIT).";
 "baseline.against" = "%1$@의 %2$@";
 "baseline.lastMonth" = "지난달 같은 기간";
 "baseline.milestone" = "다음 이정표";
@@ -80,6 +81,10 @@
 "settings.today" = "오늘";
 "settings.upToDate" = "최신 버전입니다";
 "settings.updateAvailable" = "새 버전 %@ 사용 가능";
+"settings.apps" = "Apps";
+"settings.allTimeUsage" = "All time %@ · %@";
+"settings.periodSince" = "Since %@";
+"settings.periodUsage" = "This period %@ · %@";
 "settings.vendors" = "제공업체";
 "status.exited" = "tokscale이 종료되었습니다 (코드 %d). 터미널에서 tokscale을 실행해 원인을 확인하세요.";
 "status.noNode" = "tokscale을 시작할 수 없습니다 — node를 찾지 못했습니다. nvm이나 fnm을 쓴다면 표준 위치에 설치되어 있는지 확인하세요.";
@@ -88,6 +93,12 @@
 "status.reading" = "tokscale 데이터를 읽는 중…";
 "status.timedOut" = "tokscale 응답 시간이 초과되었습니다. 곧 다시 시도합니다.";
 "status.undecodable" = "tokscale의 출력을 해석할 수 없습니다. 업데이트해 보세요: brew upgrade tokscale";
+"app.allTime" = "All time";
+"app.name.claudeCode" = "Claude Code";
+"app.name.claudeDesktop" = "Claude Desktop";
+"app.name.codex" = "Codex CLI";
+"app.name.cursor" = "Cursor";
+"app.share" = "%@ of everything";
 "vendor.allTime" = "누적";
 "vendor.name.alibaba" = "Qwen";
 "vendor.name.moonshot" = "Moonshot Kimi";
@@ -158,3 +169,13 @@
 "whatsNew.v128.icon.title" = "검은색 테두리로 통일";
 "whatsNew.version" = "버전 %@";
 "whatsNew.welcome" = "TokNotch를 시작합니다";
+"settings.claudeDesktopSubtitle" = "Cowork and local-agent sessions are counted from Claude Desktop’s on-disk JSONL. Main-window chat is not logged locally—enable the Claude Desktop ring for that bucket, or use Claude Code for ~/.claude/projects tracking.";
+"settings.claudeDesktopTitle" = "Claude Desktop detected";
+"settings.copyCursorLogin" = "Copy login command";
+"settings.cursorLoginSubtitle" = "Cursor usage is read from the Cursor API after you link tokscale once in Terminal.";
+"settings.cursorLoginTitle" = "Link Cursor for usage";
+"settings.dataSources" = "Data sources";
+"settings.dataSourcesFootnote" = "Matches what the bundled tokscale binary can scan on this Mac.";
+"settings.enterSeatCost" = "Choose Custom… and enter your monthly seat cost";
+"settings.integrations" = "Integrations";
+"settings.scanDataSources" = "tokscale clients";

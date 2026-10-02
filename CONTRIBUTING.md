@@ -1,5 +1,9 @@
 # Contributing
 
+This tree is the **codewise26/toknotch** fork. Upstream is
+[ReffWu/toknotch](https://github.com/ReffWu/toknotch). Fork-specific release and
+Sparkle setup: [docs/FORK.md](docs/FORK.md).
+
 ## Building
 
 ```sh

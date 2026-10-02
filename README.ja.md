@@ -6,7 +6,7 @@
 
 **その AI プラン、何倍の元が取れていますか？**
 
-<a href="https://github.com/ReffWu/toknotch/releases/latest/download/TokNotch.dmg">
+<a href="https://github.com/codewise26/toknotch/releases/latest/download/TokNotch.dmg">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/download-ja-dark.png">
     <img src="docs/assets/readme/download-ja-light.png" height="52" alt="Mac 版をダウンロード">
@@ -125,11 +125,11 @@ Português (Brasil) · Nederlands · Polski · Русский · Türkçe · Ti�
 
 ## 手に入れる
 
-[TokNotch.dmg をダウンロード](https://github.com/ReffWu/toknotch/releases/latest/download/TokNotch.dmg)
+[TokNotch.dmg をダウンロード](https://github.com/codewise26/toknotch/releases/latest/download/TokNotch.dmg)
 して開き、TokNotch を「アプリケーション」へドラッグしてください。Developer ID で署名され
 Apple の公証を受けているので、ほかのアプリと同じように開けます。以降は Mac の起動時に
 自動で立ち上がり、自分で最新に保ちます。すべてのビルドは
-[Releases ページ](https://github.com/ReffWu/toknotch/releases)にあります。
+[Releases ページ](https://github.com/codewise26/toknotch/releases)にあります。
 
 **macOS 14 (Sonoma) 以降が必要です。**
 

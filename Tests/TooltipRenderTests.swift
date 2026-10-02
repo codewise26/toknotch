@@ -14,7 +14,7 @@ final class TooltipRenderTests: XCTestCase {
         XCTAssertFalse(rings.isEmpty)
 
         for ring in rings {
-            let budget = ring.cardHeight(showingModels: RingSnapshot.collapsedModels)
+            let budget = ring.cardHeightForHover(showingModels: RingSnapshot.collapsedModels)
             let renderer = ImageRenderer(
                 content: TooltipCard(ring: ring).padding(20).background(Color(white: 0.26))
             )

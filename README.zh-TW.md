@@ -6,7 +6,7 @@
 
 **你的每個 AI 方案，到底回本了幾倍？**
 
-<a href="https://github.com/ReffWu/toknotch/releases/latest/download/TokNotch.dmg">
+<a href="https://github.com/codewise26/toknotch/releases/latest/download/TokNotch.dmg">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/download-zh-Hant-dark.png">
     <img src="docs/assets/readme/download-zh-Hant-light.png" height="52" alt="下載 Mac 版">
@@ -121,10 +121,10 @@ Português (Brasil) · Nederlands · Polski · Русский · Türkçe · Ti�
 
 ## 裝上它
 
-[下載 TokNotch.dmg](https://github.com/ReffWu/toknotch/releases/latest/download/TokNotch.dmg)，
+[下載 TokNotch.dmg](https://github.com/codewise26/toknotch/releases/latest/download/TokNotch.dmg)，
 打開後把 TokNotch 拖進「應用程式」。App 使用 Developer ID 簽署並經過 Apple 公證，和其他
 App 一樣直接打開，之後會隨 Mac 自動啟動，也會自己保持最新。歷次版本都在
-[Releases 頁面](https://github.com/ReffWu/toknotch/releases)。
+[Releases 頁面](https://github.com/codewise26/toknotch/releases)。
 
 **需要 macOS 14 (Sonoma) 或更新版本。**
 

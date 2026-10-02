@@ -73,6 +73,6 @@ final class TokscaleContractTests: XCTestCase {
         async let lifetime = TokscaleCLI.lifetime(home: home.path)
         let digest = UsageDigest.build(graph: try await graph, lifetime: try await lifetime)
         XCTAssertEqual(digest.lifetime.totals.tokens, 3365 + 3400)
-        XCTAssertEqual(Set(digest.vendors.map(\.vendor)), [.anthropic, .openai])
+        XCTAssertEqual(Set(digest.apps.map(\.app.id)), ["claude", "codex"])
     }
 }

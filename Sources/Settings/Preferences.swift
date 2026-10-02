@@ -93,42 +93,20 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 /// What the user has chosen, kept in `UserDefaults`.
 @MainActor
 final class Preferences: ObservableObject {
-    /// Vendor rings the user has switched on, on top of the three primaries.
-    ///
-    /// Stored as the *enabled* set, which is the opposite of the old provider
-    /// switch and deliberately so: the three primaries carry the app, and a
-    /// vendor breakdown is something you go and ask for. A vendor added to the
-    /// roster in a later version therefore stays quiet until it is wanted,
-    /// instead of appearing on the notch unannounced.
-    @Published var enabledVendors: Set<Vendor> {
-        didSet { defaults.set(enabledVendors.map(\.rawValue), forKey: Keys.enabledVendors) }
+    /// Per-app rings the user has switched on, on top of the three primaries.
+    @Published var enabledApps: Set<String> {
+        didSet { defaults.set(Array(enabledApps), forKey: Keys.enabledApps) }
     }
 
-    /// What each vendor's plan costs and when it renews, for the payback
-    /// figures on that vendor's card.
-    ///
-    /// Entered by hand and stored here rather than read from an account: doing
-    /// it the other way would mean holding vendor credentials, which is the one
-    /// thing this app promises not to do.
-    @Published var subscriptions: [Vendor: Subscription] {
+    /// What each app's plan costs and when it renews.
+    @Published var subscriptions: [String: Subscription] {
         didSet {
-            let keyed = Dictionary(uniqueKeysWithValues:
-                subscriptions.map { ($0.key.rawValue, $0.value) })
-            defaults.set(try? JSONEncoder().encode(keyed), forKey: Keys.subscriptions)
+            defaults.set(try? JSONEncoder().encode(subscriptions), forKey: Keys.subscriptions)
         }
     }
 
-    /// Vendors whose ring has already been switched on for them, once, because
-    /// a plan was found for it.
-    ///
-    /// Remembered separately from `enabledVendors` so that turning one off
-    /// stays off: without this, every launch would helpfully switch it back on
-    /// and the setting would appear not to work. A vendor only ever gets this
-    /// courtesy once.
-    @Published private(set) var autoEnabledVendors: Set<Vendor> {
-        didSet {
-            defaults.set(autoEnabledVendors.map(\.rawValue), forKey: Keys.autoEnabled)
-        }
+    @Published private(set) var autoEnabledApps: Set<String> {
+        didSet { defaults.set(Array(autoEnabledApps), forKey: Keys.autoEnabled) }
     }
 
     /// Which settings page was open last. Reopening on the page you were last
@@ -184,9 +162,13 @@ final class Preferences: ObservableObject {
     private let defaults: UserDefaults
     private enum Keys {
         static let enabledVendors = "enabledVendors"
-        static let subscriptions = "vendorSubscriptions"
+        static let enabledApps = "enabledApps"
+        static let subscriptions = "appSubscriptions"
+        static let legacySubscriptions = "vendorSubscriptions"
         static let lastSettingsPage = "lastSettingsPage"
-        static let autoEnabled = "autoEnabledVendors"
+        static let autoEnabled = "autoEnabledApps"
+        static let legacyAutoEnabled = "autoEnabledVendors"
+        static let migratedToApps = "migratedVendorPrefsToApps"
         static let hasLaunched = "hasLaunchedBefore"
         static let visibility = "notchVisibility"
         static let edge = "notchEdge"
@@ -234,13 +216,10 @@ final class Preferences: ObservableObject {
         self.defaults = defaults
         self.isFirstLaunch = !defaults.bool(forKey: Keys.hasLaunched)
         defaults.set(true, forKey: Keys.hasLaunched)
-        self.enabledVendors = Set((defaults.stringArray(forKey: Keys.enabledVendors) ?? [])
-            .compactMap(Vendor.init(rawValue:)))
-        let storedPlans = defaults.data(forKey: Keys.subscriptions)
+        Self.migrateVendorPrefsIfNeeded(into: defaults)
+        self.enabledApps = Set(defaults.stringArray(forKey: Keys.enabledApps) ?? [])
+        self.subscriptions = defaults.data(forKey: Keys.subscriptions)
             .flatMap { try? JSONDecoder().decode([String: Subscription].self, from: $0) } ?? [:]
-        self.subscriptions = Dictionary(uniqueKeysWithValues: storedPlans.compactMap { key, plan in
-            Vendor(rawValue: key).map { ($0, plan) }
-        })
         // Absent means never chosen, which is the hover behaviour the app was
         // designed around. A "hidden" left by an older version lands here too.
         self.notchVisibility = defaults.string(forKey: Keys.visibility)
@@ -264,8 +243,7 @@ final class Preferences: ObservableObject {
         // Absent means nothing has been shown yet, which is true of a fresh
         // install — so the current release reads as new to it.
         self.lastSeenVersion = defaults.string(forKey: Keys.lastSeenVersion)
-        self.autoEnabledVendors = Set((defaults.stringArray(forKey: Keys.autoEnabled) ?? [])
-            .compactMap(Vendor.init(rawValue:)))
+        self.autoEnabledApps = Set(defaults.stringArray(forKey: Keys.autoEnabled) ?? [])
         self.showsInDock = defaults.bool(forKey: Keys.showsInDock)
         self.showsMenuBarIcon = defaults.object(forKey: Keys.showsMenuBarIcon) as? Bool ?? true
         self.sharesUsageStatistics = defaults.object(forKey: Keys.sharesUsageStatistics) as? Bool ?? true
@@ -277,33 +255,69 @@ final class Preferences: ObservableObject {
             .flatMap(AppLanguage.init(rawValue:)) ?? .system
     }
 
-    func showsRing(for vendor: Vendor) -> Bool { enabledVendors.contains(vendor) }
+    func showsRing(for app: UsageApp) -> Bool { enabledApps.contains(app.id) }
 
-    /// Switch on the ring for a vendor whose plan has just been recognised.
-    ///
-    /// The point is that finding a subscription is itself the answer to "do you
-    /// want to see this vendor" — somebody paying Anthropic every month wants
-    /// the Anthropic ring, and making them go and find the switch for it is
-    /// asking a question the app already knows the answer to.
-    func autoEnableRings(for vendors: [Vendor]) {
-        let fresh = vendors.filter { !autoEnabledVendors.contains($0) }
+    func autoEnableRings(for apps: [UsageApp]) {
+        let ids = apps.map(\.id)
+        let fresh = ids.filter { !autoEnabledApps.contains($0) }
         guard !fresh.isEmpty else { return }
-        autoEnabledVendors.formUnion(fresh)
-        enabledVendors.formUnion(fresh)
+        autoEnabledApps.formUnion(fresh)
+        enabledApps.formUnion(fresh)
         Log.usage.notice("switched on \(fresh.count, privacy: .public) ring(s) for detected plans")
     }
 
-    func subscription(for vendor: Vendor) -> Subscription? {
-        subscriptions[vendor].flatMap { $0.isActive ? $0 : nil }
+    func subscription(for app: UsageApp) -> Subscription? {
+        subscriptions[app.id].flatMap { $0.isActive ? $0 : nil }
     }
 
-    func setSubscription(_ plan: Subscription?, for vendor: Vendor) {
-        if let plan, plan.isActive { subscriptions[vendor] = plan }
-        else { subscriptions.removeValue(forKey: vendor) }
+    func setRing(_ shown: Bool, for app: UsageApp) {
+        if shown { enabledApps.insert(app.id) } else { enabledApps.remove(app.id) }
     }
 
-    func setRing(_ shown: Bool, for vendor: Vendor) {
-        if shown { enabledVendors.insert(vendor) } else { enabledVendors.remove(vendor) }
+    private static func migrateVendorPrefsIfNeeded(into defaults: UserDefaults) {
+        guard !defaults.bool(forKey: Keys.migratedToApps) else { return }
+        defaults.set(true, forKey: Keys.migratedToApps)
+
+        if defaults.stringArray(forKey: Keys.enabledApps) == nil {
+            let legacy = defaults.stringArray(forKey: Keys.enabledVendors) ?? []
+            var apps = Set<String>()
+            for raw in legacy {
+                guard let vendor = Vendor(rawValue: raw) else { continue }
+                apps.formUnion(appIDs(for: vendor))
+            }
+            if !apps.isEmpty { defaults.set(Array(apps), forKey: Keys.enabledApps) }
+        }
+
+        if defaults.data(forKey: Keys.subscriptions) == nil,
+           let legacyData = defaults.data(forKey: Keys.legacySubscriptions),
+           let legacy = try? JSONDecoder().decode([String: Subscription].self, from: legacyData) {
+            var migrated: [String: Subscription] = [:]
+            for (key, plan) in legacy {
+                guard let vendor = Vendor(rawValue: key) else { continue }
+                for appID in appIDs(for: vendor) { migrated[appID] = plan }
+            }
+            if !migrated.isEmpty {
+                defaults.set(try? JSONEncoder().encode(migrated), forKey: Keys.subscriptions)
+            }
+        }
+
+        if defaults.stringArray(forKey: Keys.autoEnabled) == nil {
+            let legacy = defaults.stringArray(forKey: Keys.legacyAutoEnabled) ?? []
+            var apps = Set<String>()
+            for raw in legacy {
+                guard let vendor = Vendor(rawValue: raw) else { continue }
+                apps.formUnion(appIDs(for: vendor))
+            }
+            if !apps.isEmpty { defaults.set(Array(apps), forKey: Keys.autoEnabled) }
+        }
+    }
+
+    private static func appIDs(for vendor: Vendor) -> [String] {
+        switch vendor {
+        case .openai: return ["codex"]
+        case .anthropic: return ["claude", "claude-desktop"]
+        default: return []
+        }
     }
 
     /// Forget everything this app has stored and quit.

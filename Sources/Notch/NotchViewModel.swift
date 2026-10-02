@@ -20,7 +20,7 @@ final class NotchViewModel: ObservableObject {
     /// Whether asking for more would show more — false once the screen is what
     /// is holding the rest back.
     func canExpand(_ ring: RingSnapshot) -> Bool {
-        expandedRing != ring.id && ring.modelRows.count > RingSnapshot.collapsedModels
+        expandedRing != ring.id && ring.maxScopedModelCount > RingSnapshot.collapsedModels
     }
 
     /// The most model rows this screen has room for.
@@ -317,7 +317,7 @@ final class NotchViewModel: ObservableObject {
 
     /// Open or close the hovered card.
     func toggleExpansion() {
-        guard let ring = hoveredRing, ring.modelRows.count > RingSnapshot.collapsedModels
+        guard let ring = hoveredRing, ring.maxScopedModelCount > RingSnapshot.collapsedModels
         else { return }
         expandedRing = expandedRing == ring.id ? nil : ring.id
     }
@@ -352,7 +352,7 @@ final class NotchViewModel: ObservableObject {
                                         standingRows: 2)
         return NotchLayout.cardHeight(rowCount: 2 + models, barCount: models + 1,
                                       ruleCount: 1, hasHero: true, hasHeroBar: true,
-                                      hasMoreLine: true)
+                                      hasModelScopeTabs: true, hasMoreLine: true)
     }
 
     /// The drawn extent of the notch body right now, along the stack.

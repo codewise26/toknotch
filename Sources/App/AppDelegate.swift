@@ -82,7 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         let store = UsageStore()
         store.language = preferences.appLanguage
-        store.enabledVendors = preferences.enabledVendors
+        store.enabledApps = preferences.enabledApps
         store.subscriptions = preferences.subscriptions
         self.store = store
 
@@ -164,9 +164,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             .sink { [weak store] in store?.language = $0 }
             .store(in: &cancellables)
 
-        preferences.$enabledVendors
+        preferences.$enabledApps
             .receive(on: RunLoop.main)
-            .sink { [weak store] in store?.enabledVendors = $0 }
+            .sink { [weak store] in store?.enabledApps = $0 }
             .store(in: &cancellables)
 
         preferences.$subscriptions
@@ -180,7 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         store.$detectedPlans
             .receive(on: RunLoop.main)
             .sink { [weak preferences] plans in
-                preferences?.autoEnableRings(for: plans.keys.sorted { $0.rawValue < $1.rawValue })
+                preferences?.autoEnableRings(for: plans.keys.sorted { $0.id < $1.id })
             }
             .store(in: &cancellables)
 

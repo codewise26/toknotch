@@ -6,14 +6,14 @@ enum RingKind: Equatable, Hashable {
     case today
     case month
     case lifetime
-    case vendor(Vendor)
+    case app(UsageApp)
 
     var id: String {
         switch self {
         case .today:            return "today"
         case .month:            return "month"
         case .lifetime:         return "lifetime"
-        case .vendor(let v):    return "vendor.\(v.rawValue)"
+        case .app(let app):     return "app.\(app.id)"
         }
     }
 
@@ -43,6 +43,12 @@ struct MetricRow: Identifiable, Equatable {
     /// the plan has returned this period, and what the vendor has done overall
     /// — and running them together as one list reads as one list.
     var startsGroup: Bool = false
+}
+
+/// Which slice of per-model usage an app card is listing.
+enum ModelUsageScope: Equatable {
+    case period
+    case allTime
 }
 
 /// One ring, ready to draw. Everything is already formatted and localised: the
@@ -87,6 +93,13 @@ struct RingSnapshot: Identifiable, Equatable {
     /// the screen and about whether the reader has asked for more, and neither
     /// of those belongs in the digest.
     var modelRows: [MetricRow] = []
+    /// Lifetime model rows when `showsModelScopeTabs` — `modelRows` then holds
+    /// the billing-period list.
+    var allTimeModelRows: [MetricRow] = []
+    /// App cards only: period vs all-time tabs above the model table.
+    var showsModelScopeTabs: Bool = false
+    var modelScopePeriodTitle: String = ""
+    var modelScopeAllTimeTitle: String = ""
     /// Set when there is nothing to show — no tokscale, no data yet, a failed
     /// read. Replaces the rows rather than sitting alongside them.
     var note: String? = nil
@@ -105,14 +118,25 @@ struct RingSnapshot: Identifiable, Equatable {
     /// makes a fourth model look like it does not exist.
     static let collapsedModels = 3
 
+    func scopedModelRows(for scope: ModelUsageScope) -> [MetricRow] {
+        guard showsModelScopeTabs else { return modelRows }
+        return scope == .period ? modelRows : allTimeModelRows
+    }
+
+    /// The busiest model list this card can show — used for expand affordance.
+    var maxScopedModelCount: Int {
+        guard showsModelScopeTabs else { return modelRows.count }
+        return max(modelRows.count, allTimeModelRows.count)
+    }
+
     /// The rows a card draws, given how many models it has room for.
-    func rows(showingModels limit: Int) -> [MetricRow] {
-        rows + modelRows.prefix(max(0, limit))
+    func rows(showingModels limit: Int, scope: ModelUsageScope = .period) -> [MetricRow] {
+        rows + scopedModelRows(for: scope).prefix(max(0, limit))
     }
 
     /// Models left over after `limit` — what the "more" line counts.
-    func hiddenModels(after limit: Int) -> Int {
-        max(0, modelRows.count - max(0, limit))
+    func hiddenModels(after limit: Int, scope: ModelUsageScope = .period) -> Int {
+        max(0, scopedModelRows(for: scope).count - max(0, limit))
     }
 
     /// Format for the line offering the models that did not fit, with the count
@@ -127,16 +151,29 @@ struct RingSnapshot: Identifiable, Equatable {
     /// moment two of them spell it out separately they drift. They already did:
     /// a copy that had not learnt about group rules reserved eleven points too
     /// few, which is a card whose bottom row cannot be reached with the mouse.
-    func cardHeight(showingModels limit: Int) -> CGFloat {
-        let shown = rows(showingModels: limit)
+    func cardHeight(showingModels limit: Int, scope: ModelUsageScope = .period) -> CGFloat {
+        let shown = rows(showingModels: limit, scope: scope)
         return NotchLayout.cardHeight(
             rowCount: shown.count,
             barCount: shown.filter { $0.fraction != nil }.count,
             ruleCount: shown.dropFirst().filter(\.startsGroup).count,
             hasHero: note == nil,
             hasHeroBar: hasHeroBar,
-            hasMoreLine: hiddenModels(after: limit) > 0,
+            hasModelScopeTabs: showsModelScopeTabs,
+            hasMoreLine: hiddenModels(after: limit, scope: scope) > 0,
             note: note
+        )
+    }
+
+    /// Hover and tooltip sizing use the taller of the two scopes so switching
+    /// tabs does not clip the card.
+    func cardHeightForHover(showingModels limit: Int) -> CGFloat {
+        guard showsModelScopeTabs else {
+            return cardHeight(showingModels: limit, scope: .period)
+        }
+        return max(
+            cardHeight(showingModels: limit, scope: .period),
+            cardHeight(showingModels: limit, scope: .allTime)
         )
     }
 }

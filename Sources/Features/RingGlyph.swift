@@ -12,6 +12,7 @@ enum RingGlyph: Equatable {
     case month
     case lifetime
     case vendor(Vendor)
+    case app(UsageApp)
 
     /// Trims each mark to the same optical weight.
     ///
@@ -28,7 +29,7 @@ enum RingGlyph: Equatable {
         // matched.
         case .month:    return 0.96
         case .lifetime: return 1.30
-        case .vendor:   return 0.96
+        case .vendor, .app: return 0.96
         }
     }
 }
@@ -44,6 +45,7 @@ struct RingGlyphView: View {
             case .month:    symbol("calendar")
             case .lifetime: symbol("infinity")
             case .vendor(let vendor): mark(for: vendor)
+            case .app(let app): mark(for: app)
             }
         }
         // Every mark is drawn into the same box and then scaled to the same
@@ -60,6 +62,19 @@ struct RingGlyphView: View {
         Image(systemName: name)
             .resizable()
             .scaledToFit()
+    }
+
+    @ViewBuilder
+    private func mark(for app: UsageApp) -> some View {
+        if let outline = app.outline {
+            GlyphShape(outline: outline).fill(style: FillStyle(eoFill: true))
+        } else {
+            Text(app.initials)
+                .font(.system(size: size * (app.initials.count >= 3 ? 0.42 : 0.60),
+                              weight: .semibold, design: .rounded))
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+        }
     }
 
     @ViewBuilder

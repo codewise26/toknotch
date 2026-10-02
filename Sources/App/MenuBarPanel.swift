@@ -27,7 +27,7 @@ struct MenuBarPanel: View {
             }
             payback
             periods
-            if plans.count > 1 { vendors }
+            if plans.count > 1 { appsList }
             Divider().padding(.horizontal, 6)
             actions
         }
@@ -77,12 +77,12 @@ struct MenuBarPanel: View {
     // MARK: Payback
 
     /// Every plan in force, busiest earner first.
-    private var plans: [(vendor: Vendor, payback: Payback)] {
-        store.availableVendors
-            .compactMap { vendor in
-                store.plan(for: vendor)
-                    .flatMap { store.payback(for: vendor, plan: $0) }
-                    .map { (vendor, $0) }
+    private var plans: [(app: UsageApp, payback: Payback)] {
+        store.availableApps
+            .compactMap { app in
+                store.plan(for: app)
+                    .flatMap { store.payback(for: app, plan: $0) }
+                    .map { (app, $0) }
             }
             .sorted { $0.payback.multiple > $1.payback.multiple }
     }
@@ -129,15 +129,15 @@ struct MenuBarPanel: View {
 
     /// Each plan on its own line, once there is more than one: with a single
     /// plan the hero above already is that plan.
-    private var vendors: some View {
+    private var appsList: some View {
         VStack(spacing: 0) {
-            ForEach(Array(plans.enumerated()), id: \.element.vendor.rawValue) { index, entry in
+            ForEach(Array(plans.enumerated()), id: \.element.app.id) { index, entry in
                 if index > 0 { Divider().padding(.leading, 36).opacity(0.5) }
                 HStack(spacing: 10) {
-                    RingGlyphView(glyph: .vendor(entry.vendor), size: 15)
-                        .foregroundStyle(entry.vendor.ringTint)
+                    RingGlyphView(glyph: .app(entry.app), size: 15)
+                        .foregroundStyle(entry.app.ringTint)
                         .frame(width: 16)
-                    Text(entry.vendor.title(language))
+                    Text(entry.app.title(language))
                         .font(.system(size: 12))
                         .lineLimit(1)
                     Spacer(minLength: 8)
@@ -147,7 +147,7 @@ struct MenuBarPanel: View {
                         .monospacedDigit()
                     Text(String(format: "%.1f×", entry.payback.multiple))
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(entry.vendor.tint)
+                        .foregroundStyle(entry.app.tint)
                         .monospacedDigit()
                         .frame(minWidth: 44, alignment: .trailing)
                 }

@@ -8,7 +8,7 @@
 enum TestRing {
     static func make(_ index: Int, rows: Int = 3, bars: Int = 0) -> RingSnapshot {
         RingSnapshot(
-            kind: .vendor(Vendor.allCases[index % Vendor.allCases.count]),
+            kind: .app(UsageApp(id: ["claude", "codex", "cursor"][index % 3])),
             title: "R\(index)",
             caption: "范围",
             glyph: .today,

@@ -28,6 +28,9 @@ final class NotchPanel: NSPanel {
         guard let view = contentView, view.hitTest(event.locationInWindow) != nil else {
             return super.mouseDown(with: event)
         }
+        // SwiftUI controls (segment tabs, etc.) live in the hosting view — they
+        // only receive the click when the panel forwards it.
+        super.mouseDown(with: event)
         onClick?()
     }
 

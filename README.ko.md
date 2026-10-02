@@ -6,7 +6,7 @@
 
 **내 AI 요금제, 몇 배나 본전을 뽑았을까?**
 
-<a href="https://github.com/ReffWu/toknotch/releases/latest/download/TokNotch.dmg">
+<a href="https://github.com/codewise26/toknotch/releases/latest/download/TokNotch.dmg">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/download-ko-dark.png">
     <img src="docs/assets/readme/download-ko-light.png" height="52" alt="Mac용 다운로드">
@@ -123,10 +123,10 @@ Português (Brasil) · Nederlands · Polski · Русский · Türkçe · Ti�
 
 ## 설치하기
 
-[TokNotch.dmg 다운로드](https://github.com/ReffWu/toknotch/releases/latest/download/TokNotch.dmg)
+[TokNotch.dmg 다운로드](https://github.com/codewise26/toknotch/releases/latest/download/TokNotch.dmg)
 후 열어서 TokNotch를 응용 프로그램 폴더로 드래그하세요. Developer ID로 서명되고 Apple의 공증을
 받아 다른 앱처럼 바로 열리며, 이후에는 Mac을 켤 때 자동으로 실행되고 스스로 최신 상태를
-유지합니다. 모든 빌드는 [Releases 페이지](https://github.com/ReffWu/toknotch/releases)에 있습니다.
+유지합니다. 모든 빌드는 [Releases 페이지](https://github.com/codewise26/toknotch/releases)에 있습니다.
 
 **macOS 14 (Sonoma) 이상이 필요합니다.**
 

@@ -2,6 +2,7 @@
 
 "about.tagline" = "Во сколько раз окупилась каждая ваша подписка на ИИ?";
 "about.version" = "Версия %@";
+"about.upstream" = "Fork maintained by codewise26. Based on TokNotch by Reff Wu (MIT).";
 "baseline.against" = "%2$@ от %1$@";
 "baseline.lastMonth" = "тех же дней прошлого месяца";
 "baseline.milestone" = "следующей отметки";
@@ -80,6 +81,10 @@
 "settings.today" = "Сегодня";
 "settings.upToDate" = "Всё актуально";
 "settings.updateAvailable" = "Доступна версия %@";
+"settings.apps" = "Apps";
+"settings.allTimeUsage" = "All time %@ · %@";
+"settings.periodSince" = "Since %@";
+"settings.periodUsage" = "This period %@ · %@";
 "settings.vendors" = "Провайдеры";
 "status.exited" = "tokscale завершился с кодом %d. Запустите его в терминале, чтобы понять почему.";
 "status.noNode" = "tokscale не запустился — не найден node. Если вы управляете node через nvm или fnm, проверьте, что он установлен в обычном месте.";
@@ -88,6 +93,12 @@
 "status.reading" = "Читаем данные tokscale…";
 "status.timedOut" = "tokscale слишком долго не отвечал. Скоро будет новая попытка.";
 "status.undecodable" = "Не удалось разобрать вывод tokscale — попробуйте: brew upgrade tokscale";
+"app.allTime" = "All time";
+"app.name.claudeCode" = "Claude Code";
+"app.name.claudeDesktop" = "Claude Desktop";
+"app.name.codex" = "Codex CLI";
+"app.name.cursor" = "Cursor";
+"app.share" = "%@ of everything";
 "vendor.allTime" = "Всего";
 "vendor.name.alibaba" = "Qwen";
 "vendor.name.moonshot" = "Moonshot Kimi";
@@ -158,3 +169,13 @@
 "whatsNew.v128.icon.title" = "Тёмная рамка везде";
 "whatsNew.version" = "Версия %@";
 "whatsNew.welcome" = "Добро пожаловать в TokNotch";
+"settings.claudeDesktopSubtitle" = "Cowork and local-agent sessions are counted from Claude Desktop’s on-disk JSONL. Main-window chat is not logged locally—enable the Claude Desktop ring for that bucket, or use Claude Code for ~/.claude/projects tracking.";
+"settings.claudeDesktopTitle" = "Claude Desktop detected";
+"settings.copyCursorLogin" = "Copy login command";
+"settings.cursorLoginSubtitle" = "Cursor usage is read from the Cursor API after you link tokscale once in Terminal.";
+"settings.cursorLoginTitle" = "Link Cursor for usage";
+"settings.dataSources" = "Data sources";
+"settings.dataSourcesFootnote" = "Matches what the bundled tokscale binary can scan on this Mac.";
+"settings.enterSeatCost" = "Choose Custom… and enter your monthly seat cost";
+"settings.integrations" = "Integrations";
+"settings.scanDataSources" = "tokscale clients";

@@ -11,7 +11,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 app="TokNotch"
-repo="ReffWu/toknotch"
+repo="codewise26/toknotch"
 team="37V2HFG7YT"
 identity="Developer ID Application: XIN SHENG WU ($team)"
 version="$(awk -F'"' '/MARKETING_VERSION:/ {print $2}' project.yml)"

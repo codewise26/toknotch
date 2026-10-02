@@ -302,8 +302,15 @@ enum NotchLayout {
     /// The tooltip's height for a card of `rowCount` rows, `barCount` of which
     /// draw a bar. Worked out here rather than left to SwiftUI, so the hover
     /// region and the panel can both be sized before the card is ever laid out.
+    /// Compact pill segment above the model table (Variant A mockup).
+    static let modelScopeTabsTopGap = Design.px(24)
+    /// Fixed segment height inside the track (not stretched with card slack).
+    static let modelScopeSegmentHeight = Design.px(42)
+    static let modelScopeTabsBlockHeight = Design.px(50)
+
     static func cardHeight(rowCount: Int, barCount: Int = 0, ruleCount: Int = 0,
                            hasHero: Bool = false, hasHeroBar: Bool = false,
+                           hasModelScopeTabs: Bool = false,
                            hasMoreLine: Bool = false,
                            note: String? = nil) -> CGFloat {
         var height = 2 * cardPadding
@@ -320,6 +327,10 @@ enum NotchLayout {
             return height + headerToBlock + bodyTextHeight(note)
         }
         guard rowCount > 0 else { return height }
+
+        if hasModelScopeTabs {
+            height += modelScopeTabsTopGap + modelScopeTabsBlockHeight
+        }
 
         let gaps = rowCount - 1
         height += headerToBlock
@@ -345,7 +356,7 @@ enum NotchLayout {
             // can never be what pushes the "more" line off the bottom.
             let height = cardHeight(rowCount: standingRows + n, barCount: n + 1,
                                     ruleCount: 1, hasHero: true, hasHeroBar: true,
-                                    hasMoreLine: true)
+                                    hasModelScopeTabs: true, hasMoreLine: true)
             guard height <= cardBudget else { break }
             fits = n
         }
@@ -369,7 +380,7 @@ enum NotchLayout {
     /// collapsed stack can produce is one that still has models to offer.
     static let defaultMaxCardHeight = cardHeight(
         rowCount: maxRowCount, barCount: maxBarCount, ruleCount: maxRuleCount,
-        hasHero: true, hasHeroBar: true, hasMoreLine: true
+        hasHero: true, hasHeroBar: true, hasModelScopeTabs: true, hasMoreLine: true
     )
 
     /// Room at each end of the stack: enough for the settings orb to hang past

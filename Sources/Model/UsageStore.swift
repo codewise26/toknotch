@@ -2,52 +2,32 @@ import AppKit
 import Combine
 import os
 
-/// Reads tokscale on a timer and publishes the rings.
-///
-/// There is deliberately no archive here. The old store kept the last good
-/// reading on disk because its numbers came from vendor APIs that could be
-/// down, rate-limited or signed out; these come from a local command that
-/// answers in under a second, so a cache would buy nothing and could only ever
-/// show something staler than simply asking again.
 @MainActor
 final class UsageStore: ObservableObject {
     @Published private(set) var rings: [RingSnapshot] = []
-    /// A read in flight, so the rings can show it happening.
     @Published private(set) var isRefreshing = false
-    /// Vendors this machine has actually used, busiest first — the settings
-    /// list is built from this, so a ring is only offered for a company whose
-    /// models have really been run.
-    @Published private(set) var availableVendors: [Vendor] = []
-    /// When the numbers on screen were read. Nil until the first read lands.
+    @Published private(set) var availableApps: [UsageApp] = []
     @Published private(set) var lastUpdated: Date?
-    /// What went wrong with the most recent read, in the reader's language.
-    /// Cleared as soon as one succeeds.
     @Published private(set) var problem: String?
-    /// Plans found in the tools' own configuration files. Nothing here was
-    /// typed by anybody, and nothing here came from a credential store.
-    @Published private(set) var detectedPlans: [Vendor: DetectedPlan] = [:]
+    @Published private(set) var detectedPlans: [UsageApp: DetectedPlan] = [:]
+    @Published private(set) var cursorNeedsLogin = false
+    @Published private(set) var clientScanReport: String?
 
-    /// Presentation, not data. Changing either re-renders from the digest we
-    /// already have rather than shelling out again.
     var language: AppLanguage = .system { didSet { guard language != oldValue else { return }; render() } }
-    var enabledVendors: Set<Vendor> = [] { didSet { guard enabledVendors != oldValue else { return }; render() } }
-    /// The user's own answers, which override anything detected. A vendor with
-    /// an entry of zero here is somebody saying "no plan", which is different
-    /// from having said nothing.
-    var subscriptions: [Vendor: Subscription] = [:] { didSet { guard subscriptions != oldValue else { return }; render() } }
+    var enabledApps: Set<String> = [] { didSet { guard enabledApps != oldValue else { return }; render() } }
+    var subscriptions: [String: Subscription] = [:] { didSet { guard subscriptions != oldValue else { return }; render() } }
 
-    /// What the payback figures actually use: what was found, with whatever the
-    /// user has said about it laid over the top.
-    var effectivePlans: [Vendor: Subscription] {
-        var merged = detectedPlans.compactMapValues(\.subscription)
+    var effectivePlans: [String: Subscription] {
+        var merged = Dictionary(uniqueKeysWithValues:
+            detectedPlans.compactMap { app, plan in
+                plan.subscription.map { (app.id, $0) }
+            })
         merged.merge(subscriptions) { _, override in override }
         return merged.filter { $0.value.isActive }
     }
 
-    /// Whether this vendor's figures came from its own configuration rather
-    /// than from the user.
-    func isDetected(_ vendor: Vendor) -> Bool {
-        subscriptions[vendor] == nil && detectedPlans[vendor]?.subscription != nil
+    func isDetected(_ app: UsageApp) -> Bool {
+        subscriptions[app.id] == nil && detectedPlans[app]?.subscription != nil
     }
 
     private var digest: UsageDigest?
@@ -56,11 +36,14 @@ final class UsageStore: ObservableObject {
     private var timer: Timer?
     private var task: Task<Void, Never>?
     private var wakeObserver: NSObjectProtocol?
-    /// When Antigravity's usage was last copied into tokscale's cache.
     private var lastAntigravitySync: Date?
-    /// A sync takes several seconds of CPU, so it runs at most this often,
-    /// plus whenever somebody asks for a refresh by hand.
+    private var lastCursorSync: Date?
+    private var lastDesktopScan: Date?
+    private var desktopSupplement: ClaudeDesktopSupplement = .empty
     private static let antigravitySyncInterval: TimeInterval = 5 * 60
+    private static let cursorSyncInterval: TimeInterval = 5 * 60
+    private static let desktopScanInterval: TimeInterval = 5 * 60
+    private static let cursorBundleID = "com.todesktop.230313mzl4w4u92"
 
     init(interval: TimeInterval = 60) {
         self.interval = interval
@@ -76,8 +59,6 @@ final class UsageStore: ObservableObject {
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
 
-        // Waking is the one moment the numbers are guaranteed to have moved on
-        // without us.
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -91,16 +72,14 @@ final class UsageStore: ObservableObject {
         task?.cancel()
         task = nil
         if let wakeObserver {
-            // Block-based observers are not removed by `removeObserver(self)`.
             NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
             self.wakeObserver = nil
         }
     }
 
-    /// Seed a digest without shelling out, for tests and previews.
     func loadForTesting(_ digest: UsageDigest) {
         self.digest = digest
-        self.availableVendors = digest.vendors.map(\.vendor)
+        self.availableApps = digest.apps.map(\.app)
         self.lastUpdated = digest.generatedAt
         render()
     }
@@ -110,14 +89,15 @@ final class UsageStore: ObservableObject {
         isRefreshing = true
         task = Task { [weak self] in
             await self?.syncAntigravityIfDue(force: byHand)
+            await self?.syncCursorIfDue(force: byHand)
+            self?.scanDesktopIfDue(force: byHand)
+            if byHand { await self?.loadClientScan() }
             await self?.refresh()
             self?.task = nil
             self?.isRefreshing = false
         }
     }
 
-    /// Only on a Mac that has Antigravity. A failed sync is logged and
-    /// otherwise ignored: the other tools' numbers must not wait on it.
     private func syncAntigravityIfDue(force: Bool) async {
         guard NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.antigravity") != nil
         else { return }
@@ -131,31 +111,72 @@ final class UsageStore: ObservableObject {
         }
     }
 
+    private func syncCursorIfDue(force: Bool) async {
+        guard NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.cursorBundleID) != nil
+        else {
+            cursorNeedsLogin = false
+            return
+        }
+        let linked = await TokscaleCLI.cursorIsLinked()
+        cursorNeedsLogin = !linked
+        guard linked else { return }
+        if !force, let last = lastCursorSync,
+           Date().timeIntervalSince(last) < Self.cursorSyncInterval { return }
+        lastCursorSync = Date()
+        do {
+            try await TokscaleCLI.syncCursor()
+        } catch {
+            Log.usage.error("cursor sync failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private func loadClientScan() async {
+        do {
+            var report = try await TokscaleCLI.clientsReport()
+            if desktopSupplement.filesScanned > 0 || desktopSupplement.messagesParsed > 0 {
+                report += """
+
+                Claude Desktop JSONL: \(desktopSupplement.filesScanned) file(s), \
+                \(desktopSupplement.messagesParsed) assistant message(s).
+                """
+            }
+            clientScanReport = report
+        } catch {
+            Log.usage.error("clients scan failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private func scanDesktopIfDue(force: Bool) {
+        guard ClaudeDesktopScanner.isInstalled() else {
+            desktopSupplement = .empty
+            return
+        }
+        if !force, let last = lastDesktopScan,
+           Date().timeIntervalSince(last) < Self.desktopScanInterval { return }
+        lastDesktopScan = Date()
+        desktopSupplement = ClaudeDesktopScanner.scan()
+    }
+
     private func refresh() async {
         do {
-            // Two independent commands; run together they cost about as long as
-            // the slower one.
             async let graph = TokscaleCLI.graph()
             async let lifetime = TokscaleCLI.lifetime()
-            let digest = UsageDigest.build(graph: try await graph, lifetime: try await lifetime)
+            let digest = UsageDigest.build(
+                graph: try await graph,
+                lifetime: try await lifetime,
+                desktop: desktopSupplement.hasUsage ? desktopSupplement : nil
+            )
 
             self.digest = digest
             self.failure = nil
             self.problem = nil
             self.lastUpdated = digest.generatedAt
-            self.availableVendors = digest.vendors.map(\.vendor)
-            // Re-read on each refresh: a plan changed in another app should
-            // show up here without restarting.
             self.detectedPlans = PlanDetector.detect()
-            // Notice rather than debug: this is the app's health signal, and
-            // debug records are not kept, so the one line worth having when
-            // somebody asks why the rings are empty was never there to read.
+            self.availableApps = mergedApps(from: digest)
             Log.usage.notice("""
-                read ok — lifetime \(digest.lifetime.totals.tokens, privacy: .public),                 today \(digest.today.totals.tokens, privacy: .public),                 \(digest.vendors.count, privacy: .public) vendor(s)
+                read ok — lifetime \(digest.lifetime.totals.tokens, privacy: .public),                 today \(digest.today.totals.tokens, privacy: .public),                 \(digest.apps.count, privacy: .public) app(s)
                 """)
         } catch {
-            // The last good digest stays on screen. A failed read is a fact
-            // about this attempt, not about the numbers already shown.
             self.failure = Self.explain(error, language: language)
             self.problem = self.failure
             Log.usage.error("tokscale read failed: \(String(describing: error), privacy: .public)")
@@ -163,42 +184,73 @@ final class UsageStore: ObservableObject {
         render()
     }
 
-    /// What a plan is currently returning, so the settings screen can show the
-    /// answer while the figures are still being typed rather than making
-    /// somebody close it and hover a ring to find out.
-    /// The plan in force for a vendor, detected or overridden.
-    func plan(for vendor: Vendor) -> Subscription? { effectivePlans[vendor] }
+    private func mergedApps(from digest: UsageDigest) -> [UsageApp] {
+        let usageOrder = digest.apps.map(\.app)
+        var extras = detectedPlans.keys.filter { app in !usageOrder.contains(app) }
+        let desktop = UsageApp.claudeDesktop
+        if (ClaudeDesktopScanner.isInstalled() || desktopSupplement.hasUsage),
+           !usageOrder.contains(desktop), !extras.contains(desktop) {
+            extras.append(desktop)
+        }
+        return usageOrder + extras
+    }
 
-    func payback(for vendor: Vendor, plan: Subscription,
+    func plan(for app: UsageApp) -> Subscription? {
+        if let stored = subscriptions[app.id] { return stored }
+        return detectedPlans[app]?.subscription
+    }
+
+    func payback(for app: UsageApp, plan: Subscription,
                  now: Date = Date(), calendar: Calendar = .current) -> Payback? {
         guard let digest, plan.isActive else { return nil }
         let period = BillingPeriod.current(renewalDay: plan.renewalDay,
                                            now: now, calendar: calendar)
         return Payback(subscription: plan, period: period,
-                       earned: digest.totals(for: vendor, in: period, calendar: calendar).cost)
+                       earned: digest.totals(for: app, in: period, calendar: calendar).cost)
     }
 
-    /// Every plan in force, added up over each one's own current period: what
-    /// they cost together and what the same usage would have cost at API
-    /// prices. Nil while no plan is set, so callers can say so instead of
-    /// showing a zero.
     func periodPayback() -> (paid: Double, earned: Double)? {
         let plans = effectivePlans
         guard !plans.isEmpty else { return nil }
         return plans.reduce((paid: 0, earned: 0)) { sum, entry in
-            (sum.paid + entry.value.monthlyUSD,
-             sum.earned + (payback(for: entry.key, plan: entry.value)?.earned ?? 0))
+            let app = UsageApp(id: entry.key)
+            return (sum.paid + entry.value.monthlyUSD,
+                    sum.earned + (payback(for: app, plan: entry.value)?.earned ?? 0))
         }
     }
 
-    /// One vendor's lifetime totals, for the settings list to show what each
-    /// row is actually about.
-    func lifetime(for vendor: Vendor) -> UsageDigest.Totals? {
-        digest?.vendors.first { $0.vendor == vendor }?.totals
+    func lifetime(for app: UsageApp) -> UsageDigest.Totals? {
+        digest?.apps.first { $0.app == app }?.totals
     }
 
-    /// Rebuild the rings from whatever we know. Cheap, and the only place
-    /// `rings` is written.
+    func periodTotals(for app: UsageApp, plan: Subscription,
+                      now: Date = Date(), calendar: Calendar = .current) -> UsageDigest.Totals? {
+        guard let digest else { return nil }
+        let period = BillingPeriod.current(renewalDay: plan.renewalDay, now: now, calendar: calendar)
+        return digest.totals(for: app, in: period, calendar: calendar)
+    }
+
+    func periodTotals(for app: UsageApp, renewalDay: Int,
+                      now: Date = Date(), calendar: Calendar = .current) -> UsageDigest.Totals? {
+        guard let digest else { return nil }
+        let period = BillingPeriod.current(renewalDay: renewalDay, now: now, calendar: calendar)
+        return digest.totals(for: app, in: period, calendar: calendar)
+    }
+
+    /// Plans that define a billing period for an app ring — same gate as Settings
+    /// (`plan != nil`), including custom $0, not only paid `effectivePlans`.
+    private var subscriptionsForRings: [String: Subscription] {
+        guard let digest else { return [:] }
+        var result: [String: Subscription] = [:]
+        for usage in digest.apps {
+            guard let plan = plan(for: usage.app) else { continue }
+            if plan.isActive || plan.planID == nil {
+                result[usage.app.id] = plan
+            }
+        }
+        return result
+    }
+
     private func render() {
         guard let digest else {
             let note = failure
@@ -207,29 +259,21 @@ final class UsageStore: ObservableObject {
             }
             return
         }
-        rings = RingBuilder.rings(from: digest, vendors: enabledVendors,
-                                  subscriptions: effectivePlans, language: language)
+        rings = RingBuilder.rings(from: digest, apps: enabledApps,
+                                  subscriptions: subscriptionsForRings, language: language)
     }
 
-    /// Says what went wrong *and* what fixes it. "HTTP 500" for a local command
-    /// that is simply not installed sends people to look in the wrong place.
     private static func explain(_ error: Error, language: AppLanguage) -> String {
         guard let failure = error as? TokscaleCLI.Failure else {
             return language.t("status.readFailed", (error as NSError).localizedDescription)
         }
         switch failure {
-        case .notInstalled:
-            return language.t("status.notInstalled")
-        case .exited(127):
-            // tokscale is a `#!/usr/bin/env node` script when it is not the
-            // bundled binary, so this means node is somewhere we did not look.
-            return language.t("status.noNode")
-        case .exited(let code):
-            return language.t("status.exited", code)
-        case .undecodable:
-            return language.t("status.undecodable")
-        case .timedOut:
-            return language.t("status.timedOut")
+        case .notInstalled:      return language.t("status.notInstalled")
+        case .exited(127):       return language.t("status.noNode")
+        case .exited(let code):  return language.t("status.exited", code)
+        case .undecodable:       return language.t("status.undecodable")
+        case .timedOut:          return language.t("status.timedOut")
         }
     }
 }
+

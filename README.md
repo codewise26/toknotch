@@ -6,7 +6,10 @@
 
 **How many times over has each AI plan paid for itself?**
 
-<a href="https://github.com/ReffWu/toknotch/releases/latest/download/TokNotch.dmg">
+> **This repository** is maintained at [codewise26/toknotch](https://github.com/codewise26/toknotch).
+> It is a fork of [ReffWu/toknotch](https://github.com/ReffWu/toknotch) (MIT). See [docs/FORK.md](docs/FORK.md).
+
+<a href="https://github.com/codewise26/toknotch/releases/latest/download/TokNotch.dmg">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/download-en-dark.png">
     <img src="docs/assets/readme/download-en-light.png" height="52" alt="Download for Mac">
@@ -137,11 +140,11 @@ conventions — 万 and 亿 in Chinese, k/M/B in English, Mrd. in German.
 
 ## Getting it
 
-[Download TokNotch.dmg](https://github.com/ReffWu/toknotch/releases/latest/download/TokNotch.dmg),
-open it and drag TokNotch to Applications. It is signed with a Developer ID and
-notarized by Apple, opens like any other app, starts with your Mac, and keeps
-itself up to date after that. Every build is on the
-[Releases page](https://github.com/ReffWu/toknotch/releases).
+[Download TokNotch.dmg](https://github.com/codewise26/toknotch/releases/latest/download/TokNotch.dmg)
+when a release is published on this fork, open it and drag TokNotch to Applications.
+Sparkle updates use this repo's `appcast.xml` once signing is configured (see
+[docs/FORK.md](docs/FORK.md)). Builds appear on the
+[Releases page](https://github.com/codewise26/toknotch/releases).
 
 **Requires macOS 14 (Sonoma) or newer.**
 
@@ -153,7 +156,8 @@ make run
 ```
 
 A Debug build, ad-hoc signed, which is enough to run and develop against.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the rest, and
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the rest,
+[docs/FORK.md](docs/FORK.md) for fork-specific update setup, and
 [docs/RELEASING.md](docs/RELEASING.md) for how a release is cut.
 
 ---
@@ -168,9 +172,12 @@ the bundled tokscale binary, and a SwiftUI card that unfolds out of the edge.
 
 ## Credits
 
-TokNotch began as a fork of [vinzdg/codenotch](https://github.com/vinzdg/codenotch)
-and was rewritten around local usage accounting. The original is MIT licensed and
-its copyright is kept in [LICENSE](LICENSE).
+**This copy** is maintained by [codewise26](https://github.com/codewise26).
+
+TokNotch was created by [Reff Wu](https://github.com/ReffWu) as a fork of
+[vinzdg/codenotch](https://github.com/vinzdg/codenotch), rewritten around local
+usage accounting. Upstream lives at [ReffWu/toknotch](https://github.com/ReffWu/toknotch).
+Copyright and the MIT license are in [LICENSE](LICENSE).
 
 Usage figures come from [tokscale](https://github.com/junhoyeo/tokscale) (MIT),
 bundled in `Vendor/tokscale/`. Updates use [Sparkle](https://sparkle-project.org) (MIT).

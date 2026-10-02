@@ -92,13 +92,21 @@ struct AboutView: View {
             HStack(spacing: 6) {
                 Text(language.t("about.version", build.isEmpty ? version : "\(version) (\(build))"))
                 Text(verbatim: "·")
-                Link("GitHub", destination: URL(string: "https://github.com/ReffWu/toknotch")!)
+                Link("GitHub", destination: ForkMetadata.repositoryURL)
             }
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
             .padding(.top, 20)
 
-            Text(verbatim: "© 2026 Reff Wu")
+            Text(language.t("about.upstream"))
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 28)
+                .padding(.top, 8)
+
+            Text(verbatim: "© 2026 codewise26")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .padding(.top, 4)

@@ -18,10 +18,10 @@ final class SettingsRenderTests: XCTestCase {
         let defaults = UserDefaults(suiteName: name)!
         defaults.removePersistentDomain(forName: name)
         let preferences = Preferences(defaults: defaults)
-        preferences.enabledVendors = [.anthropic]
+        preferences.enabledApps = ["claude", "codex"]
         preferences.subscriptions = [
-            .anthropic: Subscription(monthlyUSD: 200, renewalDay: 3),
-            .openai: Subscription(monthlyUSD: 20, renewalDay: 17)
+            "claude": Subscription(monthlyUSD: 200, renewalDay: 3),
+            "codex": Subscription(monthlyUSD: 20, renewalDay: 17)
         ]
         return preferences
     }
@@ -32,7 +32,7 @@ final class SettingsRenderTests: XCTestCase {
         let preferences = makePreferences()
         let store = makeStore()
         store.subscriptions = preferences.subscriptions
-        store.enabledVendors = preferences.enabledVendors
+        store.enabledApps = preferences.enabledApps
 
         let pages: [(String, AnyView)] = [
             ("payback", AnyView(PaybackPage(preferences: preferences, store: store))),

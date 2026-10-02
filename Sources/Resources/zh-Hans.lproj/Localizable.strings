@@ -2,6 +2,7 @@
 
 "about.tagline" = "你的每个 AI 套餐，到底回本了几倍？";
 "about.version" = "版本 %@";
+"about.upstream" = "Fork maintained by codewise26. Based on TokNotch by Reff Wu (MIT).";
 "baseline.against" = "%1$@的 %2$@";
 "baseline.lastMonth" = "上月同期";
 "baseline.milestone" = "下一个里程碑";
@@ -80,6 +81,10 @@
 "settings.today" = "今日";
 "settings.upToDate" = "已是最新版本";
 "settings.updateAvailable" = "有新版本 %@";
+"settings.apps" = "Apps";
+"settings.allTimeUsage" = "All time %@ · %@";
+"settings.periodSince" = "Since %@";
+"settings.periodUsage" = "This period %@ · %@";
 "settings.vendors" = "服务商";
 "status.exited" = "tokscale 退出（代码 %d）。在终端运行 tokscale 看看它说了什么。";
 "status.noNode" = "tokscale 无法启动：找不到 node。若用 nvm/fnm 管理 node，请确保它装在常规位置。";
@@ -88,6 +93,12 @@
 "status.reading" = "正在读取 tokscale 数据…";
 "status.timedOut" = "tokscale 响应超时，稍后会自动重试。";
 "status.undecodable" = "无法解析 tokscale 的输出，可能是版本不兼容。试试升级：brew upgrade tokscale";
+"app.allTime" = "All time";
+"app.name.claudeCode" = "Claude Code";
+"app.name.claudeDesktop" = "Claude Desktop";
+"app.name.codex" = "Codex CLI";
+"app.name.cursor" = "Cursor";
+"app.share" = "%@ of everything";
 "vendor.allTime" = "累计";
 "vendor.name.alibaba" = "通义千问";
 "vendor.name.moonshot" = "月之暗面 Kimi";
@@ -158,3 +169,13 @@
 "whatsNew.v128.icon.title" = "统一用黑色边框";
 "whatsNew.version" = "版本 %@";
 "whatsNew.welcome" = "欢迎使用 TokNotch";
+"settings.claudeDesktopSubtitle" = "Cowork and local-agent sessions are counted from Claude Desktop’s on-disk JSONL. Main-window chat is not logged locally—enable the Claude Desktop ring for that bucket, or use Claude Code for ~/.claude/projects tracking.";
+"settings.claudeDesktopTitle" = "Claude Desktop detected";
+"settings.copyCursorLogin" = "Copy login command";
+"settings.cursorLoginSubtitle" = "Cursor usage is read from the Cursor API after you link tokscale once in Terminal.";
+"settings.cursorLoginTitle" = "Link Cursor for usage";
+"settings.dataSources" = "Data sources";
+"settings.dataSourcesFootnote" = "Matches what the bundled tokscale binary can scan on this Mac.";
+"settings.enterSeatCost" = "Choose Custom… and enter your monthly seat cost";
+"settings.integrations" = "Integrations";
+"settings.scanDataSources" = "tokscale clients";

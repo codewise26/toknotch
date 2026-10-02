@@ -5,6 +5,9 @@ nothing hosted: the appcast Sparkle polls and the dmg it downloads are both
 assets on the same GitHub release, so publishing a release is what publishes
 the update.
 
+**This fork** publishes to `codewise26/toknotch` and uses its own Sparkle EdDSA
+key (`make sparkle-keys`). See [FORK.md](FORK.md) before the first release.
+
 ```
 project.yml (MARKETING_VERSION)
         │
@@ -65,7 +68,7 @@ The password it asks for is an app-specific password from appleid.apple.com.
 Without it the dmg is left unsigned around the notarized, stapled app, which
 Gatekeeper accepts; a signed but un-notarized dmg would be rejected.
 
-`gh release create` is always given `-R ReffWu/toknotch`. Inside a clone that
+`gh release create` is always given `-R codewise26/toknotch`. Inside a clone that
 also has an upstream remote, gh otherwise targets the upstream repository and
 fails with a misleading "workflow scope" error.
 
@@ -97,9 +100,11 @@ installed copy. Moving the signing step into CI would mean putting that private
 key into a repository secret, which trades away the one property that makes the
 feed safe to host on somebody else's infrastructure.
 
-The key pair was made once and is shared by every ReffWu app. **Never generate
-a new one** — that strands every copy already installed, because their embedded
-public key will reject anything the new key signed.
+Generate a **fork-specific** key pair with `make sparkle-keys` and embed the
+public key in `project.yml` → `SUPublicEDKey`. **Do not** reuse upstream
+ReffWu/toknotch’s key — your releases must be signed with your private key.
+After the first public release, keep the same key for this fork so installed
+copies keep accepting updates.
 
 ## What `verify-appcast` checks
 
@@ -117,7 +122,7 @@ fails silently on somebody else's Mac:
 
 Sparkle gives up quietly. Check, in this order:
 
-1. `curl -sL https://github.com/ReffWu/toknotch/releases/latest/download/appcast.xml` —
+1. `curl -sL https://github.com/codewise26/toknotch/releases/latest/download/appcast.xml` —
    does the feed resolve at all, and is it the release you expect?
 2. Does the enclosure URL in it return the dmg, or a 404? A tag that does not
    match `v$(MARKETING_VERSION)` is the usual cause.

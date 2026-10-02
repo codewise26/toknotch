@@ -226,7 +226,7 @@ final class NotchWindowController {
     private func tooltipRect(index: Int) -> CGRect? {
         guard model.rings.indices.contains(index) else { return nil }
         let ring = model.rings[index]
-        let cardHeight = ring.cardHeight(showingModels: model.modelLimit(for: ring))
+        let cardHeight = ring.cardHeightForHover(showingModels: model.modelLimit(for: ring))
         // Across the stack the region is the card, its tail, and the gap the
         // pointer has to cross. Along it, the card's own extent.
         let cardAcross = model.edge.isVertical ? NotchLayout.cardWidth : cardHeight
@@ -420,10 +420,9 @@ final class NotchWindowController {
             onOpenSettings?()
             return
         }
-        // On the card: open it out, or close it again.
+        // Tooltip taps are handled in SwiftUI (tabs, “more models”, …).
         if let index = model.hoveredIndex,
            tooltipRect(index: index)?.contains(local) == true {
-            model.toggleExpansion()
             return
         }
         if notchRect.contains(local),

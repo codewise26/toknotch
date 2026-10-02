@@ -15,12 +15,13 @@ final class UsageDigestTests: XCTestCase {
     }
 
     private func day(_ offset: Int, tokens: Int64, cost: Double = 1,
-                     messages: Int = 1, model: String = "claude-opus-5") -> GraphReport.Day {
+                     messages: Int = 1, model: String = "claude-opus-5",
+                     client: String = "claude") -> GraphReport.Day {
         let date = calendar.date(byAdding: .day, value: offset, to: now)!
         let counts = TokenCounts(output: tokens)
         return GraphReport.Day(date: DayKey(calendar: calendar).day(date),
                                tokenBreakdown: counts,
-                               clients: [.init(modelId: model, tokens: counts,
+                               clients: [.init(client: client, modelId: model, tokens: counts,
                                                cost: cost, messages: messages)],
                                cost: cost, messages: messages)
     }
@@ -144,13 +145,33 @@ final class UsageDigestTests: XCTestCase {
         XCTAssertEqual(d.today.models.map(\.model), ["b", "c", "a"])
     }
 
-    func testVendorsAreRankedBusiestFirst() {
+    func testAppsAreRankedBusiestFirst() {
         let report = UsageReport(entries: [
-            .init(model: "gpt-5.5", tokens: TokenCounts(output: 10), cost: 0, messages: 0),
-            .init(model: "claude-opus-5", tokens: TokenCounts(output: 90), cost: 0, messages: 0)
+            .init(client: "codex", model: "gpt-5.5", tokens: TokenCounts(output: 10), cost: 0, messages: 0),
+            .init(client: "claude", model: "claude-opus-5", tokens: TokenCounts(output: 90), cost: 0, messages: 0)
         ], messages: 0)
-        XCTAssertEqual(digest([], lifetime: report).vendors.map(\.vendor), [.anthropic, .openai])
+        XCTAssertEqual(digest([], lifetime: report).apps.map(\.app.id), ["claude", "codex"])
     }
+
+    func testCustomPlanSelectionSticksAtZero() {
+        let plan = Subscription(monthlyUSD: 0, renewalDay: 1)
+        let selected = PlanMenuSelection.selected(plan: plan) { _ in nil }
+        XCTAssertEqual(selected, PlanCatalog.Plan.custom)
+    }
+
+    func testPeriodModelsMergeAcrossDays() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 6))!
+        let d = Fixtures.digest(now: now, calendar: calendar)
+        let app = UsageApp(id: "codex")
+        let period = BillingPeriod.current(renewalDay: 1, now: now, calendar: calendar)
+        let models = d.models(for: app, in: period, calendar: calendar)
+        XCTAssertFalse(models.isEmpty)
+        let total = d.totals(for: app, in: period, calendar: calendar).tokens
+        XCTAssertEqual(models.reduce(0) { $0 + $1.totals.tokens }, total)
+    }
+
 }
 
 /// Who built a model is worked out from its id, never from tokscale's
@@ -364,25 +385,25 @@ final class LocalizationTests: XCTestCase {
 
 /// The rings the stack actually shows.
 final class RingBuilderTests: XCTestCase {
-    private func rings(vendors: Set<Vendor>) -> [RingSnapshot] {
-        RingBuilder.rings(from: Fixtures.digest(), vendors: vendors, language: .simplifiedChinese)
+    private func rings(apps: Set<String>) -> [RingSnapshot] {
+        RingBuilder.rings(from: Fixtures.digest(), apps: apps, language: .simplifiedChinese)
     }
 
     func testTheThreePrimariesAlwaysComeFirst() {
-        let ids = rings(vendors: []).map(\.id)
+        let ids = rings(apps: []).map(\.id)
         XCTAssertEqual(ids, RingKind.primaries.map(\.id))
     }
 
-    func testVendorRingsAreOptInAndFollowThePrimaries() {
-        let ids = rings(vendors: [.anthropic]).map(\.id)
+    func testAppRingsAreOptInAndFollowThePrimaries() {
+        let ids = rings(apps: ["claude"]).map(\.id)
         XCTAssertEqual(ids.count, 4)
-        XCTAssertEqual(ids.last, RingKind.vendor(.anthropic).id)
+        XCTAssertEqual(ids.last, RingKind.app(UsageApp(id: "claude")).id)
     }
 
     /// Every card has to say what its arc was measured against, or a ring at
     /// 70% means nothing.
     func testEveryRingExplainsItsOwnArc() {
-        for ring in rings(vendors: [.anthropic, .openai]) {
+        for ring in rings(apps: ["claude", "codex"]) {
             XCTAssertFalse(ring.caption.isEmpty, "\(ring.id) does not say what it measures")
             XCTAssertFalse(ring.headline.isEmpty)
         }
@@ -390,12 +411,12 @@ final class RingBuilderTests: XCTestCase {
 
     /// No card may carry more rows than the panel reserved room for.
     func testNoCardExceedsTheReservedHeight() {
-        for ring in rings(vendors: Set(Vendor.allCases)) {
+        for ring in rings(apps: ["claude", "codex", "cursor"]) {
             XCTAssertLessThanOrEqual(
                 ring.rows(showingModels: RingSnapshot.collapsedModels).count,
                 NotchLayout.maxRowCount, ring.id)
             XCTAssertLessThanOrEqual(
-                ring.cardHeight(showingModels: RingSnapshot.collapsedModels),
+                ring.cardHeightForHover(showingModels: RingSnapshot.collapsedModels),
                 NotchLayout.defaultMaxCardHeight, ring.id)
         }
     }
@@ -407,5 +428,64 @@ final class RingBuilderTests: XCTestCase {
         XCTAssertFalse(ring.hasReading)
         XCTAssertNil(ring.fraction)
         XCTAssertEqual(ring.id, RingKind.today.id)
+    }
+
+    /// Custom $0 still tracks the billing period on the ring; payback waits for a price.
+    func testAppRingShowsPeriodUsageWhenPlanHasNoMonthlyPrice() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 6, hour: 14))!
+        let digest = Fixtures.digest(now: now, calendar: calendar)
+        let app = UsageApp(id: "codex")
+        let subscription = Subscription(monthlyUSD: 0, renewalDay: 1)
+        let rings = RingBuilder.rings(
+            from: digest, apps: [app.id], subscriptions: [app.id: subscription],
+            language: .english, now: now, calendar: calendar
+        )
+        guard let ring = rings.first(where: { $0.kind == .app(app) }) else {
+            return XCTFail("missing codex app ring")
+        }
+        let period = BillingPeriod.current(renewalDay: 1, now: now, calendar: calendar)
+        let periodTokens = digest.totals(for: app, in: period, calendar: calendar).tokens
+        XCTAssertEqual(ring.hero, UsageFormat.tokens(periodTokens, .english))
+        XCTAssertNotEqual(ring.hero, ring.headline)
+        XCTAssertNil(ring.heroFraction)
+        XCTAssertFalse(ring.rows.contains { $0.id == "payback" })
+        XCTAssertTrue(ring.showsModelScopeTabs)
+        XCTAssertFalse(ring.allTimeModelRows.isEmpty)
+    }
+
+    func testAppRingWithoutPlanHasNoScopeTabs() {
+        let digest = Fixtures.digest()
+        let app = UsageApp(id: "codex")
+        let rings = RingBuilder.rings(
+            from: digest, apps: [app.id], subscriptions: [:],
+            language: .english
+        )
+        guard let ring = rings.first(where: { $0.kind == .app(app) }) else {
+            return XCTFail("missing codex app ring")
+        }
+        XCTAssertFalse(ring.showsModelScopeTabs)
+        XCTAssertTrue(ring.allTimeModelRows.isEmpty)
+        XCTAssertFalse(ring.modelRows.isEmpty)
+    }
+
+    func testAppRingWithPlanHasDualModelLists() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 6))!
+        let digest = Fixtures.digest(now: now, calendar: calendar)
+        let app = UsageApp(id: "claude")
+        let rings = RingBuilder.rings(
+            from: digest, apps: [app.id],
+            subscriptions: ["claude": Subscription(monthlyUSD: 200, renewalDay: 3)],
+            language: .english, now: now, calendar: calendar
+        )
+        guard let ring = rings.first(where: { $0.kind == .app(app) }) else {
+            return XCTFail("missing claude app ring")
+        }
+        XCTAssertTrue(ring.showsModelScopeTabs)
+        XCTAssertFalse(ring.modelRows.isEmpty)
+        XCTAssertFalse(ring.allTimeModelRows.isEmpty)
     }
 }
