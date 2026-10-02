@@ -12,20 +12,18 @@ cd "$(dirname "$0")/.."
 
 app="TokNotch"
 repo="codewise26/toknotch"
-team="37V2HFG7YT"
-identity="Developer ID Application: XIN SHENG WU ($team)"
 version="$(awk -F'"' '/MARKETING_VERSION:/ {print $2}' project.yml)"
+
+# Override for your fork: RELEASE_IDENTITY="Developer ID Application: …" RELEASE_TEAM=…
+# shellcheck source=Scripts/resolve-signing.sh
+source "$(dirname "$0")/resolve-signing.sh"
+resolve_release_signing
 root="build/release"
 archive="$root/$app.xcarchive"
 packages="build/SourcePackages"
 feed="$root/feed"
 dmg="$root/$app.dmg"
 prefix="https://github.com/$repo/releases/download/v$version/"
-
-security find-identity -v -p codesigning | grep -q "$identity" || {
-  echo "No '$identity' certificate in the keychain." >&2
-  exit 1
-}
 
 rm -rf "$root"
 mkdir -p "$root"

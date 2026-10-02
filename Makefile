@@ -48,13 +48,17 @@ clean:
 # account signed in to Xcode, a verified dmg and a signed appcast. See
 # docs/RELEASING.md.
 
-.PHONY: release publish install sparkle-keys
+.PHONY: release publish install sparkle-keys dmg-adhoc
 
 release:
 	Scripts/release.sh
 
 publish:
 	Scripts/release.sh --publish
+
+# Ad-hoc signed dmg for local use — no Developer ID / notarization required.
+dmg-adhoc:
+	Scripts/dmg-adhoc.sh
 
 # A Developer ID build straight into /Applications, for trying a change on this
 # Mac. Signed like a release so privacy grants and the login item carry over,

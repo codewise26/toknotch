@@ -26,9 +26,25 @@ Until `SUPublicEDKey` is set, **Check for Updates** stays hidden (`Updater.isCon
 
 ## Publishing (when you are ready — not required for a code push)
 
-1. Set your **Developer ID** and team in `Scripts/release.sh` (replace upstream’s signing identity).
-2. Bump `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml`.
-3. `make publish` builds the dmg, generates `appcast.xml`, and creates a GitHub release on `codewise26/toknotch`.
+### Local dmg only (no Apple Developer account)
+
+```sh
+make dmg-adhoc
+```
+
+Output: `build/adhoc-dmg/TokNotch.dmg` (ad-hoc signed). Use **Right-click → Open** on first launch. Not for wide distribution.
+
+### Signed + notarized dmg (for others to install)
+
+1. Enroll in the [Apple Developer Program](https://developer.apple.com) and create a **Developer ID Application** certificate (Xcode → Settings → Accounts → Manage Certificates).
+2. Run `make release` — the script picks the first **Developer ID Application** identity in your keychain, or set:
+   ```sh
+   export RELEASE_IDENTITY='Developer ID Application: Your Name (TEAMID)'
+   export RELEASE_TEAM=TEAMID
+   make release
+   ```
+3. Bump `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION` in `project.yml`.
+4. `make publish` uploads the dmg and `appcast.xml` to GitHub (`codewise26/toknotch`).
 
 See [RELEASING.md](RELEASING.md) for the full chain.
 
